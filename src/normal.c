@@ -29,9 +29,9 @@ static int	restart_VIsual_select = 0;
 static void	set_vcount_ca __ARGS((cmdarg_T *cap, int *set_prevcount));
 #endif
 static int
-# ifdef __BORLANDC__
-_RTLENTRYF
-# endif
+#ifdef __BORLANDC__
+    _RTLENTRYF
+#endif
 		nv_compare __ARGS((const void *s1, const void *s2));
 static int	find_command __ARGS((int cmdchar));
 static void	op_colon __ARGS((oparg_T *oap));
@@ -1978,7 +1978,10 @@ do_pending_operator(cap, old_col, gui_yank)
 	    VIsual_reselect = FALSE;	    /* don't reselect now */
 #endif
 	    if (empty_region_error)
+	    {
 		vim_beep();
+		CancelRedo();
+	    }
 	    else
 	    {
 		(void)op_delete(oap);
@@ -1992,7 +1995,10 @@ do_pending_operator(cap, old_col, gui_yank)
 	    if (empty_region_error)
 	    {
 		if (!gui_yank)
+		{
 		    vim_beep();
+		    CancelRedo();
+		}
 	    }
 	    else
 		(void)op_yank(oap, FALSE, !gui_yank);
@@ -2004,7 +2010,10 @@ do_pending_operator(cap, old_col, gui_yank)
 	    VIsual_reselect = FALSE;	    /* don't reselect now */
 #endif
 	    if (empty_region_error)
+	    {
 		vim_beep();
+		CancelRedo();
+	    }
 	    else
 	    {
 		/* This is a new edit command, not a restart.  Need to
@@ -2066,7 +2075,10 @@ do_pending_operator(cap, old_col, gui_yank)
 	case OP_LOWER:
 	case OP_ROT13:
 	    if (empty_region_error)
+	    {
 		vim_beep();
+		CancelRedo();
+	    }
 	    else
 		op_tilde(oap);
 	    check_cursor_col();
@@ -2099,7 +2111,10 @@ do_pending_operator(cap, old_col, gui_yank)
 #endif
 #ifdef FEAT_VISUALEXTRA
 	    if (empty_region_error)
+	    {
 		vim_beep();
+		CancelRedo();
+	    }
 	    else
 	    {
 		/* This is a new edit command, not a restart.  Need to
@@ -2129,7 +2144,10 @@ do_pending_operator(cap, old_col, gui_yank)
 #ifdef FEAT_VISUALEXTRA
 	    if (empty_region_error)
 #endif
+	    {
 		vim_beep();
+		CancelRedo();
+	    }
 #ifdef FEAT_VISUALEXTRA
 	    else
 		op_replace(oap, cap->nchar);
@@ -2261,6 +2279,7 @@ op_function(oap)
 {
 #ifdef FEAT_EVAL
     char_u	*(argv[1]);
+    int		save_virtual_op = virtual_op;
 
     if (*p_opfunc == NUL)
 	EMSG(_("E774: 'operatorfunc' is empty"));
@@ -2279,7 +2298,14 @@ op_function(oap)
 	    argv[0] = (char_u *)"line";
 	else
 	    argv[0] = (char_u *)"char";
+
+	/* Reset virtual_op so that 'virtualedit' can be changed in the
+	 * function. */
+	virtual_op = MAYBE;
+
 	(void)call_func_retnr(p_opfunc, 1, argv, FALSE);
+
+	virtual_op = save_virtual_op;
     }
 #else
     EMSG(_("E775: Eval feature not available"));
@@ -7078,7 +7104,18 @@ nv_replace(cap)
 	    for (n = cap->count1; n > 0; --n)
 	    {
 		State = REPLACE;
-		ins_char(cap->nchar);
+		if (cap->nchar == Ctrl_E || cap->nchar == Ctrl_Y)
+		{
+		    int c = ins_copychar(curwin->w_cursor.lnum
+					   + (cap->nchar == Ctrl_Y ? -1 : 1));
+		    if (c != NUL)
+			ins_char(c);
+		    else
+			/* will be decremented further down */
+			++curwin->w_cursor.col;
+		}
+		else
+		    ins_char(cap->nchar);
 		State = old_State;
 		if (cap->ncharC1 != 0)
 		    ins_char(cap->ncharC1);
@@ -7100,7 +7137,15 @@ nv_replace(cap)
 		 * line will be changed.
 		 */
 		ptr = ml_get_buf(curbuf, curwin->w_cursor.lnum, TRUE);
-		ptr[curwin->w_cursor.col] = cap->nchar;
+		if (cap->nchar == Ctrl_E || cap->nchar == Ctrl_Y)
+		{
+		  int c = ins_copychar(curwin->w_cursor.lnum
+					   + (cap->nchar == Ctrl_Y ? -1 : 1));
+		  if (c != NUL)
+		    ptr[curwin->w_cursor.col] = c;
+		}
+		else
+		    ptr[curwin->w_cursor.col] = cap->nchar;
 		if (p_sm && msg_silent == 0)
 		    showmatch(cap->nchar);
 		++curwin->w_cursor.col;
@@ -7649,13 +7694,9 @@ nv_visual(cap)
     else		    /* start Visual mode */
     {
 	check_visual_highlight();
-	if (cap->count0)		    /* use previously selected part */
+	if (cap->count0 > 0 && resel_VIsual_mode != NUL)
 	{
-	    if (resel_VIsual_mode == NUL)   /* there is none */
-	    {
-		beep_flush();
-		return;
-	    }
+	    /* use previously selected part */
 	    VIsual = curwin->w_cursor;
 
 	    VIsual_active = TRUE;
@@ -7714,6 +7755,16 @@ nv_visual(cap)
 		/* start Select mode when 'selectmode' contains "cmd" */
 		may_start_select('c');
 	    n_start_visual_mode(cap->cmdchar);
+	    if (VIsual_mode != 'V' && *p_sel == 'e')
+		++cap->count1;  /* include one more char */
+	    if (cap->count0 > 0 && --cap->count1 > 0)
+	    {
+		/* With a count select that many characters or lines. */
+		if (VIsual_mode == 'v' || VIsual_mode == Ctrl_V)
+		    nv_right(cap);
+		else if (VIsual_mode == 'V')
+		    nv_down(cap);
+	    }
 	}
     }
 }
@@ -9363,7 +9414,7 @@ nv_put(cap)
 # ifdef FEAT_CLIPBOARD
 	    adjust_clip_reg(&regname);
 # endif
-	    if (regname == 0 || VIM_ISDIGIT(regname)
+	    if (regname == 0 || regname == '"' || VIM_ISDIGIT(regname)
 # ifdef FEAT_CLIPBOARD
 		    || (clip_unnamed && (regname == '*' || regname == '+'))
 # endif

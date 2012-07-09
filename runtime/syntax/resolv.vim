@@ -1,11 +1,10 @@
 " Vim syntax file
 " Language: resolver configuration file
-" Maintainer: David Ne\v{c}as (Yeti) <yeti@physics.muni.cz>
+" Maintainer: David Necas (Yeti) <yeti@physics.muni.cz>
 " Original Maintaner: Radu Dineiu <littledragon@altern.org>
-" License: This file can be redistribued and/or modified under the same terms
+" License: This file can be redistributed and/or modified under the same terms
 "   as Vim itself.
-" URL: http://trific.ath.cx/Ftp/vim/syntax/resolv.vim
-" Last Change: 2006-04-16
+" Last Change: 2012-05-15
 
 if version < 600
 	syntax clear
@@ -15,7 +14,7 @@ endif
 
 " Errors, comments and operators
 syn match resolvError /./
-syn match resolvComment /\s*[#;].*$/
+syn match resolvComment /\s*[#;].*$/ contains=@Spell
 syn match resolvOperator /[\/:]/ contained
 
 " IP

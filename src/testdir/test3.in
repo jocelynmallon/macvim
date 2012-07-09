@@ -299,17 +299,24 @@ char *(array[100]) = {
 
 enum soppie
 {
-	yes = 0,
-	no,
-	maybe
+yes = 0,
+no,
+maybe
 };
 
 typedef enum soppie
 {
-	yes = 0,
-	no,
-	maybe
+yes = 0,
+no,
+maybe
 };
+
+static enum
+{
+yes = 0,
+no,
+maybe
+} soppie;
 
 {
 	int a,
@@ -1422,7 +1429,7 @@ func(int a
 
 STARTTEST
 :set cino&
-2kdd=4][
+2kdd=7][
 ENDTEST
 
 void func(void)
@@ -1454,6 +1461,16 @@ void func2(void)
 		printf("This line used to be indented incorrectly.\n");
 }
 
+int foo[]
+#ifdef BAR
+
+= { 1, 2, 3,
+	4, 5, 6 }
+
+#endif
+;
+	int baz;
+
 void func3(void)
 {
 	int tab[] = {
@@ -1461,7 +1478,29 @@ void func3(void)
 	3, 4,
 	5, 6};
 
-printf("Don't you dare indent this line incorrectly!\n);
+printf("Don't you dare indent this line incorrectly!\n");
+}
+
+void
+func4(a, b,
+		c)
+int a;
+int b;
+int c;
+{
+}
+
+void
+func5(
+		int a,
+		int b)
+{
+}
+
+void
+func6(
+		int a)
+{
 }
 
 STARTTEST
@@ -1532,6 +1571,220 @@ void func(void)
 		} else
 			foo(0);
 baz();
+}
+
+STARTTEST
+:set cino=k2s,(0
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func( c1
+	&& (     c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2s,(s
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func(   c1
+	&& (      c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2s,(s,U1
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	c = c1 &&
+	(
+	c2 ||
+	c3
+	) && c4;
+}
+
+STARTTEST
+:set cino=k2s,(0,W4
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	if (   c1
+	&& (   c2
+	|| c3))
+	foo;
+
+	a_long_line(
+	argument,
+	argument);
+	a_short_line(argument,
+	argument);
+}
+
+STARTTEST
+:set cino=k2s,u2
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+}
+
+STARTTEST
+:set cino=k2s,(0,w1
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func(   c1
+	&& (      c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2,(s
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	  && condition2)
+		action();
+	function(argument1
+		&& argument2);
+
+	if (c1 && (c2 ||
+		  c3))
+		foo;
+	if (c1 &&
+	  (c2 || c3))
+	{
+	}
 }
 
 STARTTEST
