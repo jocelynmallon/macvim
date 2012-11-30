@@ -1,7 +1,7 @@
 " Vim indent file
 " Language:	Vim script
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2012 May 18
+" Last Change:	2012 Aug 02
 
 " Only load this indent file when no other was loaded.
 if exists("b:did_indent")
@@ -12,6 +12,8 @@ let b:did_indent = 1
 setlocal indentexpr=GetVimIndent()
 setlocal indentkeys+==end,=else,=cat,=fina,=END,0\\
 
+let b:undo_indent = "setl indentkeys< indentexpr<"
+
 " Only define the function once.
 if exists("*GetVimIndent")
   finish
@@ -20,6 +22,16 @@ let s:keepcpo= &cpo
 set cpo&vim
 
 function GetVimIndent()
+  let ignorecase_save = &ignorecase
+  try
+    let &ignorecase = 0
+    return GetVimIndentIntern()
+  finally
+    let &ignorecase = ignorecase_save
+  endtry
+endfunc
+
+function GetVimIndentIntern()
   " Find a non-blank line above the current line.
   let lnum = prevnonblank(v:lnum - 1)
 
@@ -54,7 +66,7 @@ function GetVimIndent()
     if i >= 0
       let ind += &sw
       if strpart(line, i, 1) == '|' && has('syntax_items')
-            \ && synIDattr(synID(lnum, i, 1), "name") =~ '\(Comment\|String\)$' 
+            \ && synIDattr(synID(lnum, i, 1), "name") =~ '\(Comment\|String\)$'
         let ind -= &sw
       endif
     endif

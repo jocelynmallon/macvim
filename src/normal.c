@@ -1451,7 +1451,7 @@ do_pending_operator(cap, old_col, gui_yank)
      * This could call do_pending_operator() recursively, but that's OK
      * because gui_yank will be TRUE for the nested call.
      */
-    if (clip_star.available
+    if ((clip_star.available || clip_plus.available)
 	    && oap->op_type != OP_NOP
 	    && !gui_yank
 # ifdef FEAT_VISUAL
@@ -1780,10 +1780,18 @@ do_pending_operator(cap, old_col, gui_yank)
 	    {
 		/* Prepare for redoing.  Only use the nchar field for "r",
 		 * otherwise it might be the second char of the operator. */
-		prep_redo(oap->regname, 0L, NUL, 'v',
-				get_op_char(oap->op_type),
-				get_extra_op_char(oap->op_type),
-				oap->op_type == OP_REPLACE ? cap->nchar : NUL);
+		if (cap->cmdchar == 'g' && (cap->nchar == 'n'
+							|| cap->nchar == 'N'))
+		    /* "gn" and "gN" are a bit different */
+		    prep_redo(oap->regname, 0L, NUL, cap->cmdchar, cap->nchar,
+					get_op_char(oap->op_type),
+					get_extra_op_char(oap->op_type));
+		else
+		    prep_redo(oap->regname, 0L, NUL, 'v',
+					get_op_char(oap->op_type),
+					get_extra_op_char(oap->op_type),
+					oap->op_type == OP_REPLACE
+							  ? cap->nchar : NUL);
 		if (!redo_VIsual_busy)
 		{
 		    redo_VIsual_mode = resel_VIsual_mode;
@@ -1968,7 +1976,7 @@ do_pending_operator(cap, old_col, gui_yank)
 		beep_flush();
 	    else
 	    {
-		(void)do_join(oap->line_count, oap->op_type == OP_JOIN, TRUE);
+		(void)do_join(oap->line_count, oap->op_type == OP_JOIN, TRUE, TRUE);
 		auto_format(FALSE, TRUE);
 	    }
 	    break;
@@ -4431,7 +4439,7 @@ find_decl(ptr, len, locally, thisblock, searchflags)
 	    break;
 	}
 #ifdef FEAT_COMMENTS
-	if (get_leader_len(ml_get_curline(), NULL, FALSE) > 0)
+	if (get_leader_len(ml_get_curline(), NULL, FALSE, TRUE) > 0)
 	{
 	    /* Ignore this line, continue at start of next line. */
 	    ++curwin->w_cursor.lnum;
@@ -7812,7 +7820,10 @@ n_start_visual_mode(c)
      * virtualedit.  Recalculate curwin->w_cursor to avoid bad hilighting.
      */
     if (c == Ctrl_V && (ve_flags & VE_BLOCK) && gchar_cursor() == TAB)
+    {
+	validate_virtcol();
 	coladvance(curwin->w_virtcol);
+    }
 #endif
     VIsual = curwin->w_cursor;
 
@@ -8022,6 +8033,18 @@ nv_g_cmd(cap)
 	nv_visual(cap);
 	break;
 #endif /* FEAT_VISUAL */
+
+    /* "gn", "gN" visually select next/previous search match
+     * "gn" selects next match
+     * "gN" selects previous match
+     */
+    case 'N':
+    case 'n':
+#ifdef FEAT_VISUAL
+	if (!current_search(cap->count1, cap->nchar == 'n'))
+#endif
+	    beep_flush();
+	break;
 
     /*
      * "gj" and "gk" two new funny movement keys -- up and down
@@ -8427,10 +8450,12 @@ nv_g_cmd(cap)
 
 #ifdef FEAT_WINDOWS
     case 't':
-	goto_tabpage((int)cap->count0);
+	if (!checkclearop(oap))
+	    goto_tabpage((int)cap->count0);
 	break;
     case 'T':
-	goto_tabpage(-(int)cap->count1);
+	if (!checkclearop(oap))
+	    goto_tabpage(-(int)cap->count1);
 	break;
 #endif
 
@@ -9358,7 +9383,7 @@ nv_join(cap)
 	{
 	    prep_redo(cap->oap->regname, cap->count0,
 			 NUL, cap->cmdchar, NUL, NUL, cap->nchar);
-	    (void)do_join(cap->count0, cap->nchar == NUL, TRUE);
+	    (void)do_join(cap->count0, cap->nchar == NUL, TRUE, TRUE);
 	}
     }
 }

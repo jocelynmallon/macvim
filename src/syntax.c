@@ -6653,8 +6653,8 @@ static char *(highlight_init_dark[]) =
 	     "PmenuThumb ctermbg=White guibg=White"),
 	CENT("Pmenu ctermbg=Magenta ctermfg=Black",
 	     "Pmenu ctermbg=Magenta ctermfg=Black guibg=Magenta"),
-	CENT("PmenuSel ctermbg=DarkGrey ctermfg=Black",
-	     "PmenuSel ctermbg=DarkGrey ctermfg=Black guibg=DarkGrey"),
+	CENT("PmenuSel ctermbg=Black ctermfg=DarkGrey",
+	     "PmenuSel ctermbg=Black ctermfg=DarkGrey guibg=DarkGrey"),
 #endif
 	CENT("Title term=bold ctermfg=LightMagenta",
 	     "Title term=bold ctermfg=LightMagenta gui=bold guifg=Magenta"),
@@ -9477,7 +9477,7 @@ highlight_list_two(cnt, attr)
     int	    cnt;
     int	    attr;
 {
-    msg_puts_attr((char_u *)("N \bI \b!  \b" + cnt / 11), attr);
+    msg_puts_attr((char_u *)&("N \bI \b!  \b"[cnt / 11]), attr);
     msg_clr_eos();
     out_flush();
     ui_delay(cnt == 99 ? 40L : (long)cnt * 50L, FALSE);

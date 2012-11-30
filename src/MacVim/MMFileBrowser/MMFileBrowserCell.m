@@ -46,10 +46,10 @@
 */
 
 
-#import "ImageAndTextCell.h"
+#import "MMFileBrowserCell.h"
 #import <AppKit/NSCell.h>
 
-@implementation ImageAndTextCell
+@implementation MMFileBrowserCell
 
 - (id)init {
     if ((self = [super init])) {
@@ -65,7 +65,7 @@
 }
 
 - (id)copyWithZone:(NSZone *)zone {
-    ImageAndTextCell *cell = (ImageAndTextCell *)[super copyWithZone:zone];
+    MMFileBrowserCell *cell = (MMFileBrowserCell *)[super copyWithZone:zone];
     cell->image = [self.image retain];
     return cell;
 }
@@ -121,15 +121,8 @@
             NSRectFill(imageFrame);
         }
         imageFrame.origin.x += 3;
-        imageFrame.size = imageSize;
-
-        if ([controlView isFlipped]) {
-            imageFrame.origin.y += ceil((cellFrame.size.height + imageFrame.size.height) / 2);
-        } else {
-            imageFrame.origin.y += ceil((cellFrame.size.height - imageFrame.size.height) / 2);
-        }
-
-        [image compositeToPoint:imageFrame.origin operation:NSCompositeSourceOver];
+        [image setFlipped:[controlView isFlipped]];
+        [image drawAtPoint:imageFrame.origin fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
     }
     [super drawWithFrame:cellFrame inView:controlView];
 }

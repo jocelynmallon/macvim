@@ -1302,7 +1302,14 @@ do_cmdline(cmdline, fgetline, cookie, flags)
 		&& cstack.cs_trylevel == 0
 #endif
 	    )
-	    && !(did_emsg && used_getline
+	    && !(did_emsg
+#ifdef FEAT_EVAL
+		/* Keep going when inside try/catch, so that the error can be
+		 * dealth with, except when it is a syntax error, it may cause
+		 * the :endtry to be missed. */
+		&& (cstack.cs_trylevel == 0 || did_emsg_syntax)
+#endif
+		&& used_getline
 			    && (getline_equal(fgetline, cookie, getexmodeline)
 			       || getline_equal(fgetline, cookie, getexline)))
 	    && (next_cmdline != NULL
@@ -1312,6 +1319,7 @@ do_cmdline(cmdline, fgetline, cookie, flags)
 			|| (flags & DOCMD_REPEAT)));
 
     vim_free(cmdline_copy);
+    did_emsg_syntax = FALSE;
 #ifdef FEAT_EVAL
     free_cmdlines(&lines_ga);
     ga_clear(&lines_ga);
@@ -2144,6 +2152,7 @@ do_one_cmd(cmdlinep, sourcing,
 	    if (!sourcing)
 		append_command(*cmdlinep);
 	    errormsg = IObuff;
+	    did_emsg_syntax = TRUE;
 	}
 	goto doend;
     }
@@ -3397,12 +3406,23 @@ set_one_cmd_context(xp, buff)
 	return NULL;
 
     /* Find start of last argument (argument just before cursor): */
-    p = buff + STRLEN(buff);
-    while (p != arg && *p != ' ' && *p != TAB)
-	p--;
-    if (*p == ' ' || *p == TAB)
-	p++;
+    p = buff;
     xp->xp_pattern = p;
+    len = (int)STRLEN(buff);
+    while (*p && p < buff + len)
+    {
+	if (*p == ' ' || *p == TAB)
+	{
+	    /* argument starts after a space */
+	    xp->xp_pattern = ++p;
+	}
+	else
+	{
+	    if (*p == '\\' && *(p + 1) != NUL)
+		++p; /* skip over escaped character */
+	    mb_ptr_adv(p);
+	}
+    }
 
     if (ea.argt & XFILE)
     {
@@ -3511,6 +3531,23 @@ set_one_cmd_context(xp, buff)
 #endif
 	    }
 	}
+#if defined(FEAT_CMDL_COMPL)
+	/* Check for user names */
+	if (*xp->xp_pattern == '~')
+	{
+	    for (p = xp->xp_pattern + 1; *p != NUL && *p != '/'; ++p)
+		;
+	    /* Complete ~user only if it partially matches a user name.
+	     * A full match ~user<Tab> will be replaced by user's home
+	     * directory i.e. something like ~user<Tab> -> /home/user/ */
+	    if (*p == NUL && p > xp->xp_pattern + 1
+				       && match_user(xp->xp_pattern + 1) == 1)
+	    {
+		xp->xp_context = EXPAND_USER;
+		++xp->xp_pattern;
+	    }
+	}
+#endif
     }
 
 /*
@@ -3828,8 +3865,17 @@ set_one_cmd_context(xp, buff)
 		    if (compl == EXPAND_MAPPINGS)
 			return set_context_in_map_cmd(xp, (char_u *)"map",
 					 arg, forceit, FALSE, FALSE, CMD_map);
-		    while ((xp->xp_pattern = vim_strchr(arg, ' ')) != NULL)
-			arg = xp->xp_pattern + 1;
+		    /* Find start of last argument. */
+		    p = arg;
+		    while (*p)
+		    {
+			if (*p == ' ')
+			    /* argument starts after a space */
+			    arg = p + 1;
+			else if (*p == '\\' && *(p + 1) != NUL)
+			    ++p; /* skip over escaped character */
+			mb_ptr_adv(p);
+		    }
 		    xp->xp_pattern = arg;
 		}
 		xp->xp_context = compl;
@@ -5393,6 +5439,7 @@ static struct
 #endif
     {EXPAND_TAGS, "tag"},
     {EXPAND_TAGS_LISTFILES, "tag_listfiles"},
+    {EXPAND_USER, "user"},
     {EXPAND_USER_VARS, "var"},
     {0, NULL}
 };
@@ -5862,8 +5909,14 @@ uc_split_args(arg, lenp)
 	}
 	else
 	{
+#ifdef FEAT_MBYTE
+	    int charlen = (*mb_ptr2len)(p);
+	    len += charlen;
+	    p += charlen;
+#else
 	    ++len;
 	    ++p;
+#endif
 	}
     }
 
@@ -5906,7 +5959,7 @@ uc_split_args(arg, lenp)
 	}
 	else
 	{
-	    *q++ = *p++;
+	    MB_COPY_CHAR(p, q);
 	}
     }
     *q++ = '"';
@@ -6475,7 +6528,10 @@ ex_quit(eap)
 	return;
     }
 #ifdef FEAT_AUTOCMD
-    if (curbuf_locked())
+    apply_autocmds(EVENT_QUITPRE, NULL, NULL, FALSE, curbuf);
+    /* Refuse to quick when locked or when the buffer in the last window is
+     * being closed (can only happen in autocommands). */
+    if (curbuf_locked() || (curbuf->b_nwindows == 1 && curbuf->b_closing))
 	return;
 #endif
 
@@ -7493,7 +7549,42 @@ ex_tabnext(eap)
 ex_tabmove(eap)
     exarg_T	*eap;
 {
-    tabpage_move(eap->addr_count == 0 ? 9999 : (int)eap->line2);
+    int tab_number = 9999;
+
+    if (eap->arg && *eap->arg != NUL)
+    {
+	char_u *p = eap->arg;
+	int    relative = 0; /* argument +N/-N means: move N places to the
+			      * right/left relative to the current position. */
+
+	if (*eap->arg == '-')
+	{
+	    relative = -1;
+	    p = eap->arg + 1;
+	}
+	else if (*eap->arg == '+')
+	{
+	    relative = 1;
+	    p = eap->arg + 1;
+	}
+	else
+	    p = eap->arg;
+
+	if (p == skipdigits(p))
+	{
+	    /* No numbers as argument. */
+	    eap->errmsg = e_invarg;
+	    return;
+	}
+
+	tab_number = getdigits(&p);
+	if (relative != 0)
+	    tab_number = tab_number * relative + tabpage_index(curtab) - 1;;
+    }
+    else if (eap->addr_count != 0)
+	tab_number = eap->line2;
+
+    tabpage_move(tab_number);
 }
 
 /*
@@ -8564,7 +8655,7 @@ ex_join(eap)
 	}
 	++eap->line2;
     }
-    (void)do_join(eap->line2 - eap->line1 + 1, !eap->forceit, TRUE);
+    (void)do_join(eap->line2 - eap->line1 + 1, !eap->forceit, TRUE, TRUE);
     beginline(BL_WHITE | BL_FIX);
     ex_may_print(eap);
 }

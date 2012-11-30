@@ -1,10 +1,11 @@
 #import <Cocoa/Cocoa.h>
 
+#import "MMFileBrowser.h"
+
 @class MMWindowController;
 @class MMFileBrowserFSItem;
-@class MMFileBrowser;
 
-@interface MMFileBrowserController : NSViewController <NSOutlineViewDataSource, NSOutlineViewDelegate> {
+@interface MMFileBrowserController : NSViewController <MMFileBrowserDelegate> {
   MMWindowController *windowController;
   MMFileBrowser *fileBrowser;
   NSPathControl *pathControl;
