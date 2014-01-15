@@ -6245,7 +6245,9 @@ get_reg_type(regname, reglen)
     regname = may_get_selection(regname);
 #endif
 
-    /* Should we check for a valid name? */
+    if (regname != NUL && !valid_yank_reg(regname, FALSE))
+        return MAUTO;
+
     get_yank_register(regname, FALSE);
 
     if (y_current->y_array != NULL)
