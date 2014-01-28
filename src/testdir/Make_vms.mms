@@ -4,11 +4,7 @@
 # Authors:	Zoltan Arpadffy, <arpadffy@polarhome.com>
 #		Sandor Kopanyi,  <sandor.kopanyi@mailbox.hu>
 #
-<<<<<<< HEAD
-# Last change:  2011 Jul 15
-=======
-# Last change:  2013 Jul 09
->>>>>>> upstream/master
+# Last change:  2013 Nov 21
 #
 # This has been tested on VMS 6.2 to 8.3 on DEC Alpha, VAX and IA64.
 # Edit the lines in the Configuration section below to select.
@@ -80,13 +76,10 @@ SCRIPT = test1.out  test2.out  test3.out  test4.out  test5.out  \
 	 test66.out test67.out test68.out test69.out \
 	 test71.out test72.out test74.out test75.out test76.out \
 	 test77.out test78.out test79.out test80.out test81.out \
-<<<<<<< HEAD
-	 test82.out
-=======
 	 test82.out test83.out test84.out test88.out test89.out \
 	 test90.out test91.out test92.out test93.out test94.out \
-	 test95.out test96.out test97.out test98.out
->>>>>>> upstream/master
+	 test95.out test96.out test97.out test98.out test99.out \
+	 test100.out test101.out test102.out test103.out
 
 # Known problems:
 # Test 30: a problem around mac format - unknown reason
@@ -99,6 +92,7 @@ SCRIPT = test1.out  test2.out  test3.out  test4.out  test5.out  \
 # with too many dots).
 #
 # Test 72: unknown reason
+# Test 85: no Lua interface
 
 .IFDEF WANT_GUI
 SCRIPT_GUI = test16.out

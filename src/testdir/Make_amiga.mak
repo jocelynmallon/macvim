@@ -13,6 +13,8 @@ VIMPROG = /vim
 # test25	uses symbolic link
 # test27	can't edit file with "*"
 # test52	only for Win32
+# test85	no Lua interface
+# test86, 87	no Python interface
 
 SCRIPTS = test1.out test3.out test4.out test5.out test6.out \
 		test7.out test8.out test9.out \
@@ -29,13 +31,10 @@ SCRIPTS = test1.out test3.out test4.out test5.out test6.out \
 		test66.out test67.out test68.out test69.out test70.out \
 		test71.out test72.out test73.out test74.out test75.out \
 		test76.out test77.out test78.out test79.out test80.out \
-<<<<<<< HEAD
-		test81.out test82.out
-=======
 		test81.out test82.out test83.out test84.out test88.out \
 		test89.out test90.out test91.out test92.out test93.out \
-		test94.out test95.out test96.out test97.out test98.out
->>>>>>> upstream/master
+		test94.out test95.out test96.out test97.out test98.out \
+		test99.out test100.out test101.out test102.out test103.out
 
 .SUFFIXES: .in .out
 
@@ -137,8 +136,6 @@ test79.out: test79.in
 test80.out: test80.in
 test81.out: test81.in
 test82.out: test82.in
-<<<<<<< HEAD
-=======
 test83.out: test83.in
 test84.out: test84.in
 test88.out: test88.in
@@ -152,4 +149,8 @@ test95.out: test95.in
 test96.out: test96.in
 test97.out: test97.in
 test98.out: test98.in
->>>>>>> upstream/master
+test99.out: test99.in
+test100.out: test100.in
+test101.out: test101.in
+test102.out: test102.in
+test103.out: test103.in
