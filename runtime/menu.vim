@@ -2,7 +2,7 @@
 " You can also use this as a start for your own set of menus.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2012 Oct 21
+" Last Change:	2013 May 17
 
 " Note that ":an" (short for ":anoremenu") is often used to make a menu work
 " in all modes and avoid side effects from mappings defined by the user.
@@ -171,7 +171,7 @@ if !has("gui_macvim")
 endif
 
 func! <SID>SelectAll()
-  exe "norm gg" . (&slm == "" ? "VG" : "gH\<C-O>G")
+  exe "norm! gg" . (&slm == "" ? "VG" : "gH\<C-O>G")
 endfunc
 
 func! s:FnameEscape(fname)
@@ -354,8 +354,10 @@ fun! s:TextWidth()
   endif
   let n = inputdialog(g:menutrans_textwidth_dialog, &tw)
   if n != ""
-    " remove leading zeros to avoid it being used as an octal number
-    let &tw = substitute(n, "^0*", "", "")
+    " Remove leading zeros to avoid it being used as an octal number.
+    " But keep a zero by itself.
+    let tw = substitute(n, "^0*", "", "")
+    let &tw = tw == '' ? 0 : tw 
   endif
 endfun
 
