@@ -232,6 +232,8 @@ static int suppress_winsize = 1;	/* don't fiddle with console */
 
 static char_u *exe_path = NULL;
 
+static BOOL win8_or_later = FALSE;
+
 /*
  * Version of ReadConsoleInput() that works with IME.
  * Works around problems on Windows 8.
@@ -251,6 +253,16 @@ read_console_input(
     static DWORD s_dwIndex = 0;
     static DWORD s_dwMax = 0;
     DWORD dwEvents;
+    int head;
+    int tail;
+    int i;
+
+    if (!win8_or_later)
+    {
+	if (nLength == -1)
+	    return PeekConsoleInput(hInput, lpBuffer, 1, lpEvents);
+	return ReadConsoleInput(hInput, lpBuffer, 1, &dwEvents);
+    }
 
     if (s_dwMax == 0)
     {
@@ -265,7 +277,29 @@ read_console_input(
 	    *lpEvents = 0;
 	    return TRUE;
 	}
+
+	if (s_dwMax > 1)
+	{
+	    head = 0;
+	    tail = s_dwMax - 1;
+	    while (head != tail)
+	    {
+		if (s_irCache[head].EventType == WINDOW_BUFFER_SIZE_EVENT
+			&& s_irCache[head + 1].EventType
+						  == WINDOW_BUFFER_SIZE_EVENT)
+		{
+		    /* Remove duplicate event to avoid flicker. */
+		    for (i = head; i < tail; ++i)
+			s_irCache[i] = s_irCache[i + 1];
+		    --tail;
+		    continue;
+		}
+		head++;
+	    }
+	    s_dwMax = tail + 1;
+	}
     }
+
     *lpBuffer = s_irCache[s_dwIndex];
     if (nLength != -1 && ++s_dwIndex >= s_dwMax)
 	s_dwMax = 0;
@@ -616,6 +650,10 @@ PlatformId(void)
 	GetVersionEx(&ovi);
 
 	g_PlatformId = ovi.dwPlatformId;
+
+	if ((ovi.dwMajorVersion == 6 && ovi.dwMinorVersion >= 2)
+		|| ovi.dwMajorVersion > 6)
+	    win8_or_later = TRUE;
 
 #ifdef HAVE_ACL
 	/*
@@ -2839,6 +2877,8 @@ mch_get_user_name(
 		return OK;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return FAIL;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2879,6 +2919,8 @@ mch_get_host_name(
 		return;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2928,6 +2970,8 @@ mch_dirname(
 		return OK;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return FAIL;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2968,7 +3012,7 @@ mch_setperm(char_u *name, long perm)
 	{
 	    n = _wchmod(p, perm);
 	    vim_free(p);
-	    if (n == -1 && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    if (n == -1 && g_PlatformId == VER_PLATFORM_WIN32_NT)
 		return FAIL;
 	    /* Retry with non-wide function (for Windows 98). */
 	}
@@ -6010,7 +6054,7 @@ mch_open(char *name, int flags, int mode)
 	{
 	    f = _wopen(wn, flags, mode);
 	    vim_free(wn);
-	    if (f >= 0)
+	    if (f >= 0 || g_PlatformId == VER_PLATFORM_WIN32_NT)
 		return f;
 	    /* Retry with non-wide function (for Windows 98). Can't use
 	     * GetLastError() here and it's unclear what errno gets set to if
@@ -6061,7 +6105,7 @@ mch_fopen(char *name, char *mode)
 	_set_fmode(oldMode);
 # endif
 
-	if (f != NULL)
+	if (f != NULL || g_PlatformId == VER_PLATFORM_WIN32_NT)
 	    return f;
 	/* Retry with non-wide function (for Windows 98). Can't use
 	 * GetLastError() here and it's unclear what errno gets set to if
