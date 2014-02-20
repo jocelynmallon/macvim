@@ -1,0 +1,5 @@
+*.mo
+src/vim
+src/xxd/xxd
+gvim.desktop
+src/auto/
