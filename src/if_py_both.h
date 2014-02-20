@@ -564,10 +564,8 @@ VimTryEnd(void)
     /* Keyboard interrupt should be preferred over anything else */
     if (got_int)
     {
-	if (current_exception != NULL)
+	if (did_throw)
 	    discard_current_exception();
-	else
-	    need_rethrow = did_throw = FALSE;
 	got_int = FALSE;
 	PyErr_SetNone(PyExc_KeyboardInterrupt);
 	return -1;
@@ -599,10 +597,7 @@ VimTryEnd(void)
     /* Python exception is preferred over vim one; unlikely to occur though */
     else if (PyErr_Occurred())
     {
-	if (current_exception != NULL)
-	    discard_current_exception();
-	else
-	    need_rethrow = did_throw = FALSE;
+	discard_current_exception();
 	return -1;
     }
     /* Finally transform VimL exception to python one */
@@ -1622,8 +1617,9 @@ _DictionaryItem(DictionaryObject *self, PyObject *args, int flags)
     }
     else if (flags & DICT_FLAG_RETURN_BOOL)
     {
-	Py_INCREF(Py_True);
-	return Py_True;
+	ret = Py_True;
+	Py_INCREF(ret);
+	return ret;
     }
 
     di = dict_lookup(hi);
@@ -1923,10 +1919,16 @@ DictionaryUpdate(DictionaryObject *self, PyObject *args, PyObject *kwargs)
     }
     else
     {
-	PyObject	*obj;
+	PyObject	*obj = NULL;
 
-	if (!PyArg_ParseTuple(args, "O", &obj))
+	if (!PyArg_ParseTuple(args, "|O", &obj))
 	    return NULL;
+
+	if (obj == NULL)
+	{
+	    Py_INCREF(Py_None);
+	    return Py_None;
+	}
 
 	if (PyObject_HasAttrString(obj, "keys"))
 	    return DictionaryUpdate(self, NULL, obj);
@@ -2373,7 +2375,7 @@ ListAssSlice(ListObject *self, Py_ssize_t first,
     PyInt	numreplaced = 0;
     PyInt	numadded = 0;
     PyInt	size;
-    listitem_T	**lis;
+    listitem_T	**lis = NULL;
 
     size = ListLength(self);
 
@@ -2509,7 +2511,7 @@ ListAssSlice(ListObject *self, Py_ssize_t first,
 	    Py_DECREF(iterator);
 	    PyErr_FORMAT(PyExc_ValueError,
 		    N_("attempt to assign sequence of size greater then %d "
-			"to extended slice"), slicelen);
+			"to extended slice"), (int) slicelen);
 	    list_restore(numadded, numreplaced, slicelen, l, lis, lastaddedli);
 	    PyMem_Free(lis);
 	    return -1;
@@ -2522,7 +2524,7 @@ ListAssSlice(ListObject *self, Py_ssize_t first,
     {
 	PyErr_FORMAT2(PyExc_ValueError,
 		N_("attempt to assign sequence of size %d to extended slice "
-		    "of size %d"), i, slicelen);
+		    "of size %d"), (int) i, (int) slicelen);
 	list_restore(numadded, numreplaced, slicelen, l, lis, lastaddedli);
 	PyMem_Free(lis);
 	return -1;
