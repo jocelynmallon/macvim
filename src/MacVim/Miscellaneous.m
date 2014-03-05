@@ -46,6 +46,7 @@ NSString *MMUseInlineImKey              = @"MMUseInlineIm";
 #endif // INCLUDE_OLD_IM_CODE
 NSString *MMSuppressTerminationAlertKey = @"MMSuppressTerminationAlert";
 NSString *MMSidebarOnLeftEdgeKey        = @"MMSidebarOnLeftEdge";
+NSString *MMSidebarDarkThemeKey         = @"MMSidebarDarkThemeKey";
 NSString *MMSidebarWidthKey             = @"MMSidebarWidth";
 NSString *MMSidebarVisibleKey           = @"MMSidebarVisible";
 NSString *MMNativeFullScreenKey         = @"MMNativeFullScreen";

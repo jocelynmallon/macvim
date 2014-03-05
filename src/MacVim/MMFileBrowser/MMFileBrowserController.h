@@ -17,6 +17,7 @@
 }
 
 - (id)initWithWindowController:(MMWindowController *)controller;
+- (void)reloadTheme;
 - (void)cleanup;
 - (void)setRoot:(NSString *)root;
 - (void)setNextKeyView:(NSView *)nextKeyView;

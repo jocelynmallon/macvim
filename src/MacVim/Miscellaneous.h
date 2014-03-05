@@ -54,6 +54,7 @@ extern NSString *MMUseInlineImKey;
 #endif // INCLUDE_OLD_IM_CODE
 extern NSString *MMSuppressTerminationAlertKey;
 extern NSString *MMSidebarOnLeftEdgeKey;
+extern NSString *MMSidebarDarkThemeKey;
 extern NSString *MMSidebarWidthKey;
 extern NSString *MMSidebarVisibleKey;
 extern NSString *MMNativeFullScreenKey;

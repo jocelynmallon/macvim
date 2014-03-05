@@ -1464,6 +1464,7 @@
                                             boolForKey:MMSidebarOnLeftEdgeKey];
     [self setSidebarView:sidebarView leftEdge:leftEdge];
     //[vimView placeViews];
+  [fileBrowserController updateBroswerViews];
     [vimController sendMessage:ForceRedrawMsgID data:nil];
 }
 

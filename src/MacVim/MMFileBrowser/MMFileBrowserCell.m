@@ -48,6 +48,7 @@
 
 #import "MMFileBrowserCell.h"
 #import <AppKit/NSCell.h>
+#import "Miscellaneous.h"
 
 @implementation MMFileBrowserCell
 
@@ -124,6 +125,14 @@
         [image setFlipped:[controlView isFlipped]];
         [image drawAtPoint:imageFrame.origin fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
     }
+
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
+      [super setTextColor:[NSColor whiteColor]];
+    } else {
+      [super setTextColor:[NSColor blackColor]];
+
+    };
+
     [super drawWithFrame:cellFrame inView:controlView];
 }
 

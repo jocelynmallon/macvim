@@ -14,6 +14,16 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 
 @implementation MMFileBrowser
 
+- (void)drawBackgroundInClipRect:(NSRect)clipRect {
+  [super drawBackgroundInClipRect:clipRect];
+  NSLog(@"%hhd", [[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]);
+  if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
+    [super setBackgroundColor:[NSColor blackColor]];
+  } else {
+    [super setBackgroundColor:[NSColor whiteColor]];
+  };
+}
+
 - (id)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
     self.refusesFirstResponder = YES;
