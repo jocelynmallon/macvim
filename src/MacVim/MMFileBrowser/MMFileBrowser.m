@@ -12,16 +12,44 @@
 
 static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 
+@implementation MMPathControl : NSPathControl
++ (Class)cellClass {
+  return [MMPathCell class];
+}
+- (void) drawRect:(NSRect)dirtyRect {
+//  NSGradient* aGradient = [[NSGradient alloc]
+//                           initWithStartingColor:[NSColor colorWithSRGBRed:0.9 green:0.9 blue:0.9 alpha:1]
+//                           endingColor:[NSColor colorWithSRGBRed:0.62 green:0.62 blue:0.62 alpha:1]];
+  ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey])
+  ? [[NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1] set]
+  : [[NSColor whiteColor] set];
+  NSRectFill (dirtyRect);
+  [super drawRect:dirtyRect];
+}
+@end
+
+@implementation MMPathCell : NSPathCell
++(Class)pathComponentCellClass{
+  return [MMPathComponentCell class];
+}
+@end
+
+@implementation MMPathComponentCell : NSPathComponentCell
+- (void)setURL:(NSURL *)url{
+  [self setTextColor:[NSColor grayColor]];
+  [super setURL:url];
+}
+@end
+
 @implementation MMFileBrowser
 
 - (void)drawBackgroundInClipRect:(NSRect)clipRect {
+  NSColor *bgColor = [[NSUserDefaults standardUserDefaults]
+                                      boolForKey:MMSidebarDarkThemeKey]
+                   ? [NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1]
+                   : [NSColor whiteColor];
+  [self setBackgroundColor:bgColor];
   [super drawBackgroundInClipRect:clipRect];
-  NSLog(@"%hhd", [[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]);
-  if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
-    [super setBackgroundColor:[NSColor blackColor]];
-  } else {
-    [super setBackgroundColor:[NSColor whiteColor]];
-  };
 }
 
 - (id)initWithFrame:(NSRect)frame {

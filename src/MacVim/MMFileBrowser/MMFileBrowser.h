@@ -2,6 +2,15 @@
 
 @class MMFileBrowserFSItem;
 
+@interface MMPathControl : NSPathControl
+@end
+
+@interface MMPathCell : NSPathCell
+@end
+
+@interface MMPathComponentCell : NSPathComponentCell
+@end
+
 @interface MMFileBrowser : NSOutlineView
 - (void)makeFirstResponder;
 - (NSMenu *)menuForEvent:(NSEvent *)event;

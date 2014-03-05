@@ -127,10 +127,10 @@
     }
 
     if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
-      [super setTextColor:[NSColor whiteColor]];
+      if (![self isHighlighted]) [super setTextColor:[NSColor lightGrayColor]];
+      else [super setTextColor:[NSColor blackColor]];
     } else {
       [super setTextColor:[NSColor blackColor]];
-
     };
 
     [super drawWithFrame:cellFrame inView:controlView];

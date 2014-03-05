@@ -223,11 +223,11 @@
                     </buttonCell>
                     <cells>
                         <column>
-                            <buttonCell type="radio" title="light theme" imagePosition="left" alignment="left" state="on" inset="2" id="cIO-mj-lWi">
+                            <buttonCell type="radio" title="dark theme" imagePosition="left" alignment="left" state="on" inset="2" id="cIO-mj-lWi">
                                 <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
                             </buttonCell>
-                            <buttonCell type="radio" title="dark theme" imagePosition="left" alignment="left" tag="1" inset="2" id="REa-JY-4ZA">
+                            <buttonCell type="radio" title="light theme" imagePosition="left" alignment="left" tag="1" inset="2" id="REa-JY-4ZA">
                                 <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
                             </buttonCell>
