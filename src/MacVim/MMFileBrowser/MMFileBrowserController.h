@@ -8,6 +8,7 @@
 @interface MMFileBrowserController : NSViewController <MMFileBrowserDelegate> {
   MMWindowController *windowController;
   MMFileBrowser *fileBrowser;
+  NSMutableSet *opennedFiles;
   NSPathControl *pathControl;
   MMFileBrowserFSItem *rootItem;
   FSEventStreamRef fsEventsStream;
@@ -23,6 +24,7 @@
 - (void)setNextKeyView:(NSView *)nextKeyView;
 - (void)makeFirstResponder:(id)sender;
 - (void)selectInBrowser;
+- (void)closeInBrowser;
 - (void)selectInBrowserByExpandingItems;
 
 - (NSMenu *)menuForRow:(NSInteger)row;

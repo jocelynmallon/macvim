@@ -1450,6 +1450,11 @@
     [fileBrowserController selectInBrowser];
 }
 
+- (IBAction)closeInFileBrowser:(id)sender
+{
+  [fileBrowserController closeInBrowser];
+}
+
 - (IBAction)revealInFileBrowser:(id)sender
 {
     [fileBrowserController selectInBrowserByExpandingItems];

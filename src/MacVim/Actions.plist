@@ -74,6 +74,8 @@
 	<string></string>
 	<key>selectInFileBrowser:</key>
 	<string></string>
+	<key>closeInFileBrowser:</key>
+	<string></string>
 	<key>undo:</key>
 	<string></string>
 	<key>unhide:</key>

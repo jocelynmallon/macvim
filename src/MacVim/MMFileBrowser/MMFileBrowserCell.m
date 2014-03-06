@@ -72,6 +72,7 @@
 }
 
 @synthesize image;
+@synthesize isOpen;
 
 - (NSRect)imageRectForBounds:(NSRect)cellFrame {
     NSRect result;
@@ -121,6 +122,21 @@
 }
 
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
+
+    if (self.isOpen) {
+        NSRect stateFrame;
+        NSDivideRect(cellFrame, &stateFrame, &cellFrame, cellFrame.size.height, NSMaxXEdge);
+        stateFrame = NSInsetRect(stateFrame, 2, 2);
+        NSBezierPath* thePath = [NSBezierPath bezierPath];
+        [thePath appendBezierPathWithOvalInRect:NSOffsetRect(stateFrame, 0, 0)];
+        [[NSColor grayColor] set];
+        [thePath fill];
+
+        [self setFont:[NSFont boldSystemFontOfSize:0]];
+    } else {
+        [self setFont:[NSFont systemFontOfSize:0]];
+    }
+
     if (image != nil) {
         NSRect imageFrame;
         NSSize imageSize = [image size];
