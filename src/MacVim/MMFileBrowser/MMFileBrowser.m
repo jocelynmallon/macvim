@@ -43,6 +43,19 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 
 @implementation MMFileBrowser
 
+- (void)highlightSelectionInClipRect:(NSRect)theClipRect {
+  NSRange    visibleRowIndexes   = [self rowsInRect:theClipRect];
+  NSIndexSet *selectedRowIndexes = [self selectedRowIndexes];
+  NSUInteger row, endRow = visibleRowIndexes.location + visibleRowIndexes.length;
+  NSColor *highlightColor = [[NSUserDefaults standardUserDefaults]
+                              boolForKey:MMSidebarDarkThemeKey]
+                          ? [NSColor grayColor]
+                          : [NSColor colorWithSRGBRed:0.9 green:0.9 blue:0.9 alpha:1];
+  [highlightColor set];
+  for (row = visibleRowIndexes.location; row < endRow; row++)
+    if([selectedRowIndexes containsIndex:row]) NSRectFill([self rectOfRow:row]);
+}
+
 - (void)drawBackgroundInClipRect:(NSRect)clipRect {
   NSColor *bgColor = [[NSUserDefaults standardUserDefaults]
                                       boolForKey:MMSidebarDarkThemeKey]

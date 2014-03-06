@@ -112,6 +112,10 @@
     [super selectWithFrame: textFrame inView: controlView editor:textObj delegate:anObject start:selStart length:selLength];
 }
 
+- (NSColor *)highlightColorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView{
+  return nil;
+}
+
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
     if (image != nil) {
         NSRect imageFrame;
@@ -119,7 +123,7 @@
         NSDivideRect(cellFrame, &imageFrame, &cellFrame, 3 + imageSize.width, NSMinXEdge);
         if ([self drawsBackground]) {
             [[self backgroundColor] set];
-            NSRectFill(imageFrame);
+             NSRectFill(imageFrame);
         }
         imageFrame.origin.x += 3;
         [image setFlipped:[controlView isFlipped]];
