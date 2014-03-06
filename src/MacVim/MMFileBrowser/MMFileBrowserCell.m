@@ -116,6 +116,10 @@
   return nil;
 }
 
+- (NSBackgroundStyle)interiorBackgroundStyle {
+  return NSBackgroundStyleLight;
+}
+
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
     if (image != nil) {
         NSRect imageFrame;

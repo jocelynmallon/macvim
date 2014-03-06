@@ -17,9 +17,6 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
   return [MMPathCell class];
 }
 - (void) drawRect:(NSRect)dirtyRect {
-//  NSGradient* aGradient = [[NSGradient alloc]
-//                           initWithStartingColor:[NSColor colorWithSRGBRed:0.9 green:0.9 blue:0.9 alpha:1]
-//                           endingColor:[NSColor colorWithSRGBRed:0.62 green:0.62 blue:0.62 alpha:1]];
   ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey])
   ? [[NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1] set]
   : [[NSColor whiteColor] set];
