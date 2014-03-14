@@ -21,7 +21,7 @@
 static int	resel_VIsual_mode = NUL;	/* 'v', 'V', or Ctrl-V */
 static linenr_T	resel_VIsual_line_count;	/* number of lines */
 static colnr_T	resel_VIsual_vcol;		/* nr of cols or end col */
-static int	VIsual_mode_orig = NUL;         /* type of Visual mode, that user entered */
+static int	VIsual_mode_orig = NUL;		/* saved Visual mode */
 
 static int	restart_VIsual_select = 0;
 #endif
@@ -5790,7 +5790,7 @@ nv_ident(cap)
     {
 	/* Escape the argument properly for a shell command */
 	ptr = vim_strnsave(ptr, n);
-	p = vim_strsave_shellescape(ptr, TRUE);
+	p = vim_strsave_shellescape(ptr, TRUE, TRUE);
 	vim_free(ptr);
 	if (p == NULL)
 	{
@@ -6202,8 +6202,17 @@ nv_left(cap)
 			    || cap->oap->op_type == OP_CHANGE)
 			&& !lineempty(curwin->w_cursor.lnum))
 		{
-		    if (*ml_get_cursor() != NUL)
-			++curwin->w_cursor.col;
+		    char_u *cp = ml_get_cursor();
+
+		    if (*cp != NUL)
+		    {
+#ifdef FEAT_MBYTE
+			if (has_mbyte)
+			    curwin->w_cursor.col += (*mb_ptr2len)(cp);
+			else
+#endif
+			    ++curwin->w_cursor.col;
+		    }
 		    cap->retval |= CA_NO_ADJ_OP_END;
 		}
 		continue;
@@ -6742,10 +6751,58 @@ nv_brackets(cap)
     {
 	if (!checkclearop(cap->oap))
 	{
+	    int	    dir = (cap->cmdchar == ']' && cap->nchar == 'p')
+							 ? FORWARD : BACKWARD;
+	    int	    regname = cap->oap->regname;
+#ifdef FEAT_VISUAL
+	    int	    was_visual = VIsual_active;
+	    int	    line_count = curbuf->b_ml.ml_line_count;
+	    pos_T   start, end;
+
+	    if (VIsual_active)
+	    {
+		start = ltoreq(VIsual, curwin->w_cursor)
+						  ? VIsual : curwin->w_cursor;
+		end =  equalpos(start,VIsual) ? curwin->w_cursor : VIsual;
+		curwin->w_cursor = (dir == BACKWARD ? start : end);
+	    }
+#endif
+# ifdef FEAT_CLIPBOARD
+	    adjust_clip_reg(&regname);
+# endif
 	    prep_redo_cmd(cap);
-	    do_put(cap->oap->regname,
-	      (cap->cmdchar == ']' && cap->nchar == 'p') ? FORWARD : BACKWARD,
-						  cap->count1, PUT_FIXINDENT);
+
+	    do_put(regname, dir, cap->count1, PUT_FIXINDENT);
+#ifdef FEAT_VISUAL
+	    if (was_visual)
+	    {
+		VIsual = start;
+		curwin->w_cursor = end;
+		if (dir == BACKWARD)
+		{
+		    /* adjust lines */
+		    VIsual.lnum += curbuf->b_ml.ml_line_count - line_count;
+		    curwin->w_cursor.lnum +=
+				      curbuf->b_ml.ml_line_count - line_count;
+		}
+
+		VIsual_active = TRUE;
+		if (VIsual_mode == 'V')
+		{
+		    /* delete visually selected lines */
+		    cap->cmdchar = 'd';
+		    cap->nchar = NUL;
+		    cap->oap->regname = regname;
+		    nv_operator(cap);
+		    do_pending_operator(cap, 0, FALSE);
+		}
+		if (VIsual_active)
+		{
+		    end_visual_mode();
+		    redraw_later(SOME_VALID);
+		}
+	    }
+#endif
 	}
     }
 
@@ -9482,7 +9539,7 @@ nv_put(cap)
 # ifdef FEAT_CLIPBOARD
 	    adjust_clip_reg(&regname);
 # endif
-           if (regname == 0 || regname == '"'
+	   if (regname == 0 || regname == '"'
 				     || VIM_ISDIGIT(regname) || regname == '-'
 # ifdef FEAT_CLIPBOARD
 		    || (clip_unnamed && (regname == '*' || regname == '+'))
