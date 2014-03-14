@@ -991,6 +991,7 @@ enum
     , BV_KP
 #ifdef FEAT_LISP
     , BV_LISP
+    , BV_LW
 #endif
     , BV_MA
     , BV_ML

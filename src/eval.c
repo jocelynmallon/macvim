@@ -8014,7 +8014,7 @@ static struct fst
     {"log10",		1, 1, f_log10},
 #endif
 #ifdef FEAT_LUA
-    {"luaeval",         1, 2, f_luaeval},
+    {"luaeval",		1, 2, f_luaeval},
 #endif
     {"map",		2, 2, f_map},
     {"maparg",		1, 4, f_maparg},
@@ -9203,7 +9203,7 @@ f_byte2line(argvars, rettv)
 byteidx(argvars, rettv, comp)
     typval_T	*argvars;
     typval_T	*rettv;
-    int		comp;
+    int		comp UNUSED;
 {
 #ifdef FEAT_MBYTE
     char_u	*t;
@@ -13905,6 +13905,7 @@ find_some_match(argvars, rettv, type)
     int		type;
 {
     char_u	*str = NULL;
+    long	len = 0;
     char_u	*expr = NULL;
     char_u	*pat;
     regmatch_T	regmatch;
@@ -13944,7 +13945,10 @@ find_some_match(argvars, rettv, type)
 	li = l->lv_first;
     }
     else
+    {
 	expr = str = get_tv_string(&argvars[0]);
+	len = (long)STRLEN(str);
+    }
 
     pat = get_tv_string_buf_chk(&argvars[1], patbuf);
     if (pat == NULL)
@@ -13968,7 +13972,7 @@ find_some_match(argvars, rettv, type)
 	{
 	    if (start < 0)
 		start = 0;
-	    if (start > (long)STRLEN(str))
+	    if (start > len)
 		goto theend;
 	    /* When "count" argument is there ignore matches before "start",
 	     * otherwise skip part of the string.  Differs when pattern is "^"
@@ -13976,7 +13980,10 @@ find_some_match(argvars, rettv, type)
 	    if (argvars[3].v_type != VAR_UNKNOWN)
 		startcol = start;
 	    else
+	    {
 		str += start;
+		len -= start;
+	    }
 	}
 
 	if (argvars[3].v_type != VAR_UNKNOWN)
@@ -14026,6 +14033,12 @@ find_some_match(argvars, rettv, type)
 #else
 		startcol = (colnr_T)(regmatch.startp[0] + 1 - str);
 #endif
+		if (startcol > (colnr_T)len
+				      || str + startcol <= regmatch.startp[0])
+		{
+		    match = FALSE;
+		    break;
+		}
 	    }
 	}
 
@@ -16937,7 +16950,7 @@ f_shellescape(argvars, rettv)
     typval_T	*rettv;
 {
     rettv->vval.v_string = vim_strsave_shellescape(
-		       get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]));
+		get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]), TRUE);
     rettv->v_type = VAR_STRING;
 }
 
@@ -21444,6 +21457,7 @@ ex_function(eap)
 		if (STRCMP(((char_u **)(newargs.ga_data))[i], arg) == 0)
 		{
 		    EMSG2(_("E853: Duplicate argument name: %s"), arg);
+		    vim_free(arg);
 		    goto erret;
 		}
 
@@ -24340,6 +24354,17 @@ repeat:
 	    if (didit)
 		goto repeat;
 	}
+    }
+
+    if (src[*usedlen] == ':' && src[*usedlen + 1] == 'S')
+    {
+	p = vim_strsave_shellescape(*fnamep, FALSE, FALSE);
+	if (p == NULL)
+	    return -1;
+	vim_free(*bufp);
+	*bufp = *fnamep = p;
+	*fnamelen = (int)STRLEN(p);
+	*usedlen += 2;
     }
 
     return valid;

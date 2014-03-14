@@ -364,7 +364,7 @@ struct u_header
 /*
  * structures used in undo.c
  */
-#if SIZEOF_INT > 2
+#if VIM_SIZEOF_INT > 2
 # define ALIGN_LONG	/* longword alignment and use filler byte */
 # define ALIGN_SIZE (sizeof(long))
 #else
@@ -1094,7 +1094,7 @@ typedef struct hashtable_S
 typedef long_u hash_T;		/* Type for hi_hash */
 
 
-#if SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
+#if VIM_SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
 typedef long	varnumber_T;
 #else
 typedef int	varnumber_T;
@@ -1449,6 +1449,7 @@ struct file_buffer
      * start and end of an operator, also used for '[ and ']
      */
     pos_T	b_op_start;
+    pos_T	b_op_start_orig;  /* used for Insstart_orig */
     pos_T	b_op_end;
 
 #ifdef FEAT_VIMINFO
@@ -1639,6 +1640,9 @@ struct file_buffer
     long	b_p_ul;		/* 'undolevels' local value */
 #ifdef FEAT_PERSISTENT_UNDO
     int		b_p_udf;	/* 'undofile' */
+#endif
+#ifdef FEAT_LISP
+    char_u	*b_p_lw;	/* 'lispwords' local value */
 #endif
 
     /* end of buffer options */
