@@ -662,7 +662,6 @@ EXTERN int	silent_mode INIT(= FALSE);
 				/* set to TRUE when "-s" commandline argument
 				 * used for ex */
 
-#ifdef FEAT_VISUAL
 EXTERN pos_T	VIsual;		/* start position of active Visual selection */
 EXTERN int	VIsual_active INIT(= FALSE);
 				/* whether Visual mode is active */
@@ -677,7 +676,6 @@ EXTERN int	VIsual_mode INIT(= 'v');
 
 EXTERN int	redo_VIsual_busy INIT(= FALSE);
 				/* TRUE when redoing Visual */
-#endif
 
 #ifdef FEAT_MOUSE
 /*
@@ -752,6 +750,12 @@ EXTERN pos_T	saved_cursor		/* w_cursor before formatting text. */
  */
 EXTERN pos_T	Insstart;		/* This is where the latest
 					 * insert/append mode started. */
+
+/* This is where the latest insert/append mode started. In contrast to
+ * Insstart, this won't be reset by certain keys and is needed for
+ * op_insert(), to detect correctly where inserting by the user started. */
+EXTERN pos_T	Insstart_orig;
+
 #ifdef FEAT_VREPLACE
 /*
  * Stuff for VREPLACE mode.
@@ -1172,11 +1176,9 @@ EXTERN int	fill_fold INIT(= '-');
 EXTERN int	fill_diff INIT(= '-');
 #endif
 
-#ifdef FEAT_VISUAL
 /* Whether 'keymodel' contains "stopsel" and "startsel". */
 EXTERN int	km_stopsel INIT(= FALSE);
 EXTERN int	km_startsel INIT(= FALSE);
-#endif
 
 #ifdef FEAT_CMDWIN
 EXTERN int	cedit_key INIT(= -1);	/* key value of 'cedit' option */

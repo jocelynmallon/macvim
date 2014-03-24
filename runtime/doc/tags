@@ -12,6 +12,7 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 %	motion.txt	/*%*
 %:.	cmdline.txt	/*%:.*
 %:8	cmdline.txt	/*%:8*
+%:S	cmdline.txt	/*%:S*
 %:e	cmdline.txt	/*%:e*
 %:gs	cmdline.txt	/*%:gs*
 %:h	cmdline.txt	/*%:h*
@@ -1788,6 +1789,7 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 :3match	pattern.txt	/*:3match*
 ::.	cmdline.txt	/*::.*
 ::8	cmdline.txt	/*::8*
+::S	cmdline.txt	/*::S*
 ::e	cmdline.txt	/*::e*
 ::gs	cmdline.txt	/*::gs*
 ::h	cmdline.txt	/*::h*
@@ -1971,8 +1973,8 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 :cabc	map.txt	/*:cabc*
 :cabclear	map.txt	/*:cabclear*
 :cad	quickfix.txt	/*:cad*
-:caddb	quickfix.txt	/*:caddb*
 :caddbuffer	quickfix.txt	/*:caddbuffer*
+:cadde	quickfix.txt	/*:cadde*
 :caddexpr	quickfix.txt	/*:caddexpr*
 :caddf	quickfix.txt	/*:caddf*
 :caddfile	quickfix.txt	/*:caddfile*
@@ -2498,6 +2500,7 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 :nbkey	netbeans.txt	/*:nbkey*
 :nbstart	netbeans.txt	/*:nbstart*
 :ne	editing.txt	/*:ne*
+:netrw-s-cr	pi_netrw.txt	/*:netrw-s-cr*
 :new	windows.txt	/*:new*
 :next	editing.txt	/*:next*
 :next_f	editing.txt	/*:next_f*
@@ -5470,6 +5473,8 @@ errors	message.txt	/*errors*
 escape	intro.txt	/*escape*
 escape()	eval.txt	/*escape()*
 escape-bar	version4.txt	/*escape-bar*
+euphoria3.vim	syntax.txt	/*euphoria3.vim*
+euphoria4.vim	syntax.txt	/*euphoria4.vim*
 eval	eval.txt	/*eval*
 eval()	eval.txt	/*eval()*
 eval-examples	eval.txt	/*eval-examples*
@@ -5736,6 +5741,7 @@ ft-dosbatch-syntax	syntax.txt	/*ft-dosbatch-syntax*
 ft-dtd-syntax	syntax.txt	/*ft-dtd-syntax*
 ft-eiffel-syntax	syntax.txt	/*ft-eiffel-syntax*
 ft-erlang-syntax	syntax.txt	/*ft-erlang-syntax*
+ft-euphoria-syntax	syntax.txt	/*ft-euphoria-syntax*
 ft-flexwiki-syntax	syntax.txt	/*ft-flexwiki-syntax*
 ft-form-syntax	syntax.txt	/*ft-form-syntax*
 ft-fortran-indent	indent.txt	/*ft-fortran-indent*
@@ -6937,6 +6943,15 @@ netreadfixup	pi_netrw.txt	/*netreadfixup*
 netrw	pi_netrw.txt	/*netrw*
 netrw-%	pi_netrw.txt	/*netrw-%*
 netrw--	pi_netrw.txt	/*netrw--*
+netrw-:Explore	pi_netrw.txt	/*netrw-:Explore*
+netrw-:Hexplore	pi_netrw.txt	/*netrw-:Hexplore*
+netrw-:Lexplore	pi_netrw.txt	/*netrw-:Lexplore*
+netrw-:MF	pi_netrw.txt	/*netrw-:MF*
+netrw-:MT	pi_netrw.txt	/*netrw-:MT*
+netrw-:Rexplore	pi_netrw.txt	/*netrw-:Rexplore*
+netrw-:Sexplore	pi_netrw.txt	/*netrw-:Sexplore*
+netrw-:Texplore	pi_netrw.txt	/*netrw-:Texplore*
+netrw-:Vexplore	pi_netrw.txt	/*netrw-:Vexplore*
 netrw-C	pi_netrw.txt	/*netrw-C*
 netrw-D	pi_netrw.txt	/*netrw-D*
 netrw-O	pi_netrw.txt	/*netrw-O*

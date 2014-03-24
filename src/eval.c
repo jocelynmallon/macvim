@@ -8014,7 +8014,7 @@ static struct fst
     {"log10",		1, 1, f_log10},
 #endif
 #ifdef FEAT_LUA
-    {"luaeval",         1, 2, f_luaeval},
+    {"luaeval",		1, 2, f_luaeval},
 #endif
     {"map",		2, 2, f_map},
     {"maparg",		1, 4, f_maparg},
@@ -9203,7 +9203,7 @@ f_byte2line(argvars, rettv)
 byteidx(argvars, rettv, comp)
     typval_T	*argvars;
     typval_T	*rettv;
-    int		comp;
+    int		comp UNUSED;
 {
 #ifdef FEAT_MBYTE
     char_u	*t;
@@ -11833,12 +11833,10 @@ f_getregtype(argvars, rettv)
     {
 	case MLINE: buf[0] = 'V'; break;
 	case MCHAR: buf[0] = 'v'; break;
-#ifdef FEAT_VISUAL
 	case MBLOCK:
 		buf[0] = Ctrl_V;
 		sprintf((char *)buf + 1, "%ld", reglen + 1);
 		break;
-#endif
     }
     rettv->v_type = VAR_STRING;
     rettv->vval.v_string = vim_strsave(buf);
@@ -12552,9 +12550,7 @@ f_has(argvars, rettv)
 #ifdef FEAT_VIRTUALEDIT
 	"virtualedit",
 #endif
-#ifdef FEAT_VISUAL
 	"visual",
-#endif
 #ifdef FEAT_VISUALEXTRA
 	"visualextra",
 #endif
@@ -13905,6 +13901,7 @@ find_some_match(argvars, rettv, type)
     int		type;
 {
     char_u	*str = NULL;
+    long	len = 0;
     char_u	*expr = NULL;
     char_u	*pat;
     regmatch_T	regmatch;
@@ -13944,7 +13941,10 @@ find_some_match(argvars, rettv, type)
 	li = l->lv_first;
     }
     else
+    {
 	expr = str = get_tv_string(&argvars[0]);
+	len = (long)STRLEN(str);
+    }
 
     pat = get_tv_string_buf_chk(&argvars[1], patbuf);
     if (pat == NULL)
@@ -13968,7 +13968,7 @@ find_some_match(argvars, rettv, type)
 	{
 	    if (start < 0)
 		start = 0;
-	    if (start > (long)STRLEN(str))
+	    if (start > len)
 		goto theend;
 	    /* When "count" argument is there ignore matches before "start",
 	     * otherwise skip part of the string.  Differs when pattern is "^"
@@ -13976,7 +13976,10 @@ find_some_match(argvars, rettv, type)
 	    if (argvars[3].v_type != VAR_UNKNOWN)
 		startcol = start;
 	    else
+	    {
 		str += start;
+		len -= start;
+	    }
 	}
 
 	if (argvars[3].v_type != VAR_UNKNOWN)
@@ -14026,6 +14029,12 @@ find_some_match(argvars, rettv, type)
 #else
 		startcol = (colnr_T)(regmatch.startp[0] + 1 - str);
 #endif
+		if (startcol > (colnr_T)len
+				      || str + startcol <= regmatch.startp[0])
+		{
+		    match = FALSE;
+		    break;
+		}
 	    }
 	}
 
@@ -14384,7 +14393,6 @@ f_mode(argvars, rettv)
     buf[1] = NUL;
     buf[2] = NUL;
 
-#ifdef FEAT_VISUAL
     if (VIsual_active)
     {
 	if (VIsual_select)
@@ -14392,9 +14400,7 @@ f_mode(argvars, rettv)
 	else
 	    buf[0] = VIsual_mode;
     }
-    else
-#endif
-	if (State == HITRETURN || State == ASKMORE || State == SETWSIZE
+    else if (State == HITRETURN || State == ASKMORE || State == SETWSIZE
 		|| State == CONFIRM)
     {
 	buf[0] = 'r';
@@ -16743,7 +16749,6 @@ f_setreg(argvars, rettv)
 		case 'V': case 'l':	/* line-wise selection */
 		    yank_type = MLINE;
 		    break;
-#ifdef FEAT_VISUAL
 		case 'b': case Ctrl_V:	/* block-wise selection */
 		    yank_type = MBLOCK;
 		    if (VIM_ISDIGIT(stropt[1]))
@@ -16753,7 +16758,6 @@ f_setreg(argvars, rettv)
 			--stropt;
 		    }
 		    break;
-#endif
 	    }
     }
 
@@ -16937,7 +16941,7 @@ f_shellescape(argvars, rettv)
     typval_T	*rettv;
 {
     rettv->vval.v_string = vim_strsave_shellescape(
-		       get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]));
+		get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]), TRUE);
     rettv->v_type = VAR_STRING;
 }
 
@@ -18756,7 +18760,6 @@ f_visualmode(argvars, rettv)
     typval_T	*argvars UNUSED;
     typval_T	*rettv UNUSED;
 {
-#ifdef FEAT_VISUAL
     char_u	str[2];
 
     rettv->v_type = VAR_STRING;
@@ -18767,7 +18770,6 @@ f_visualmode(argvars, rettv)
     /* A non-zero number or non-empty string argument: reset mode. */
     if (non_zero_arg(&argvars[0]))
 	curbuf->b_visual_mode_eval = NUL;
-#endif
 }
 
 /*
@@ -19141,14 +19143,12 @@ var2fpos(varp, dollar_lnum, fnum)
 	return NULL;
     if (name[0] == '.')				/* cursor */
 	return &curwin->w_cursor;
-#ifdef FEAT_VISUAL
     if (name[0] == 'v' && name[1] == NUL)	/* Visual start */
     {
 	if (VIsual_active)
 	    return &VIsual;
 	return &curwin->w_cursor;
     }
-#endif
     if (name[0] == '\'')			/* mark */
     {
 	pp = getmark_buf_fnum(curbuf, name[1], FALSE, fnum);
@@ -21444,6 +21444,7 @@ ex_function(eap)
 		if (STRCMP(((char_u **)(newargs.ga_data))[i], arg) == 0)
 		{
 		    EMSG2(_("E853: Duplicate argument name: %s"), arg);
+		    vim_free(arg);
 		    goto erret;
 		}
 
@@ -24340,6 +24341,17 @@ repeat:
 	    if (didit)
 		goto repeat;
 	}
+    }
+
+    if (src[*usedlen] == ':' && src[*usedlen + 1] == 'S')
+    {
+	p = vim_strsave_shellescape(*fnamep, FALSE, FALSE);
+	if (p == NULL)
+	    return -1;
+	vim_free(*bufp);
+	*bufp = *fnamep = p;
+	*fnamelen = (int)STRLEN(p);
+	*usedlen += 2;
     }
 
     return valid;
