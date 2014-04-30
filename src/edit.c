@@ -220,9 +220,7 @@ static int  ins_esc __ARGS((long *count, int cmdchar, int nomove));
 #ifdef FEAT_RIGHTLEFT
 static void ins_ctrl_ __ARGS((void));
 #endif
-#ifdef FEAT_VISUAL
 static int ins_start_select __ARGS((int c));
-#endif
 static void ins_insert __ARGS((int replaceState));
 static void ins_ctrl_o __ARGS((void));
 static void ins_shift __ARGS((int c, int lastc));
@@ -264,6 +262,7 @@ static char_u *do_insert_char_pre __ARGS((int c));
 
 static colnr_T	Insstart_textlen;	/* length of line when insert started */
 static colnr_T	Insstart_blank_vcol;	/* vcol for first inserted blank */
+static int	update_Insstart_orig = TRUE; /* set Insstart_orig to Insstart */
 
 static char_u	*last_insert = NULL;	/* the text of the previous insert,
 					   K_SPECIAL and CSI are escaped */
@@ -339,6 +338,9 @@ edit(cmdchar, startln, count)
     /* sleep before redrawing, needed for "CTRL-O :" that results in an
      * error message */
     check_for_delay(TRUE);
+
+    /* set Insstart_orig to Insstart */
+    update_Insstart_orig = TRUE;
 
 #ifdef HAVE_SANDBOX
     /* Don't allow inserting in the sandbox. */
@@ -630,6 +632,9 @@ edit(cmdchar, startln, count)
 #endif
 	if (arrow_used)	    /* don't repeat insert when arrow key used */
 	    count = 0;
+
+	if (update_Insstart_orig)
+	    Insstart_orig = Insstart;
 
 	if (stop_insert_mode)
 	{
@@ -925,7 +930,6 @@ edit(cmdchar, startln, count)
 	    }
 #endif
 
-#ifdef FEAT_VISUAL
 	/*
 	 * If 'keymodel' contains "startsel", may start selection.  If it
 	 * does, a CTRL-O and c will be stuffed, we need to get these
@@ -933,7 +937,6 @@ edit(cmdchar, startln, count)
 	 */
 	if (ins_start_select(c))
 	    continue;
-#endif
 
 	/*
 	 * The big switch to handle a character in insert mode.
@@ -1556,87 +1559,89 @@ ins_redraw(ready)
     int		conceal_update_lines = FALSE;
 #endif
 
-    if (!char_avail())
-    {
+    if (char_avail())
+	return;
+
 #if defined(FEAT_AUTOCMD) || defined(FEAT_CONCEAL)
-	/* Trigger CursorMoved if the cursor moved.  Not when the popup menu is
-	 * visible, the command might delete it. */
-	if (ready && (
+    /* Trigger CursorMoved if the cursor moved.  Not when the popup menu is
+     * visible, the command might delete it. */
+    if (ready && (
 # ifdef FEAT_AUTOCMD
-		    has_cursormovedI()
+		has_cursormovedI()
 # endif
 # if defined(FEAT_AUTOCMD) && defined(FEAT_CONCEAL)
-		    ||
+		||
 # endif
 # ifdef FEAT_CONCEAL
-		    curwin->w_p_cole > 0
+		curwin->w_p_cole > 0
 # endif
-		    )
-	    && !equalpos(last_cursormoved, curwin->w_cursor)
+		)
+	&& !equalpos(last_cursormoved, curwin->w_cursor)
+# ifdef FEAT_INS_EXPAND
+	&& !pum_visible()
+# endif
+       )
+    {
+# ifdef FEAT_SYN_HL
+	/* Need to update the screen first, to make sure syntax
+	 * highlighting is correct after making a change (e.g., inserting
+	 * a "(".  The autocommand may also require a redraw, so it's done
+	 * again below, unfortunately. */
+	if (syntax_present(curwin) && must_redraw)
+	    update_screen(0);
+# endif
+# ifdef FEAT_AUTOCMD
+	if (has_cursormovedI())
+	    apply_autocmds(EVENT_CURSORMOVEDI, NULL, NULL, FALSE, curbuf);
+# endif
+# ifdef FEAT_CONCEAL
+	if (curwin->w_p_cole > 0)
+	{
+	    conceal_old_cursor_line = last_cursormoved.lnum;
+	    conceal_new_cursor_line = curwin->w_cursor.lnum;
+	    conceal_update_lines = TRUE;
+	}
+# endif
+	last_cursormoved = curwin->w_cursor;
+    }
+#endif
+
+#ifdef FEAT_AUTOCMD
+    /* Trigger TextChangedI if b_changedtick differs. */
+    if (ready && has_textchangedI()
+	    && last_changedtick != curbuf->b_changedtick
 # ifdef FEAT_INS_EXPAND
 	    && !pum_visible()
 # endif
-	   )
-	{
-# ifdef FEAT_SYN_HL
-	    /* Need to update the screen first, to make sure syntax
-	     * highlighting is correct after making a change (e.g., inserting
-	     * a "(".  The autocommand may also require a redraw, so it's done
-	     * again below, unfortunately. */
-	    if (syntax_present(curwin) && must_redraw)
-		update_screen(0);
-# endif
-# ifdef FEAT_AUTOCMD
-	    if (has_cursormovedI())
-		apply_autocmds(EVENT_CURSORMOVEDI, NULL, NULL, FALSE, curbuf);
-# endif
-# ifdef FEAT_CONCEAL
-	    if (curwin->w_p_cole > 0)
-	    {
-		conceal_old_cursor_line = last_cursormoved.lnum;
-		conceal_new_cursor_line = curwin->w_cursor.lnum;
-		conceal_update_lines = TRUE;
-	    }
-# endif
-	    last_cursormoved = curwin->w_cursor;
-	}
-#endif
-#ifdef FEAT_AUTOCMD
-	/* Trigger TextChangedI if b_changedtick differs. */
-	if (!ready && has_textchangedI()
-		&& last_changedtick != curbuf->b_changedtick
-# ifdef FEAT_INS_EXPAND
-		&& !pum_visible()
-# endif
-		)
-	{
-	    if (last_changedtick_buf == curbuf)
-		apply_autocmds(EVENT_TEXTCHANGEDI, NULL, NULL, FALSE, curbuf);
-	    last_changedtick_buf = curbuf;
-	    last_changedtick = curbuf->b_changedtick;
-	}
-#endif
-	if (must_redraw)
-	    update_screen(0);
-	else if (clear_cmdline || redraw_cmdline)
-	    showmode();		/* clear cmdline and show mode */
-# if defined(FEAT_CONCEAL)
-	if ((conceal_update_lines
-		&& (conceal_old_cursor_line != conceal_new_cursor_line
-		    || conceal_cursor_line(curwin)))
-		|| need_cursor_line_redraw)
-	{
-	    if (conceal_old_cursor_line != conceal_new_cursor_line)
-		update_single_line(curwin, conceal_old_cursor_line);
-	    update_single_line(curwin, conceal_new_cursor_line == 0
-			   ? curwin->w_cursor.lnum : conceal_new_cursor_line);
-	    curwin->w_valid &= ~VALID_CROW;
-	}
-# endif
-	showruler(FALSE);
-	setcursor();
-	emsg_on_display = FALSE;	/* may remove error message now */
+	    )
+    {
+	if (last_changedtick_buf == curbuf)
+	    apply_autocmds(EVENT_TEXTCHANGEDI, NULL, NULL, FALSE, curbuf);
+	last_changedtick_buf = curbuf;
+	last_changedtick = curbuf->b_changedtick;
     }
+#endif
+
+    if (must_redraw)
+	update_screen(0);
+    else if (clear_cmdline || redraw_cmdline)
+	showmode();		/* clear cmdline and show mode */
+# if defined(FEAT_CONCEAL)
+    if ((conceal_update_lines
+	    && (conceal_old_cursor_line != conceal_new_cursor_line
+		|| conceal_cursor_line(curwin)))
+	    || need_cursor_line_redraw)
+    {
+	if (conceal_old_cursor_line != conceal_new_cursor_line)
+	    update_single_line(curwin, conceal_old_cursor_line);
+	update_single_line(curwin, conceal_new_cursor_line == 0
+		       ? curwin->w_cursor.lnum : conceal_new_cursor_line);
+	curwin->w_valid &= ~VALID_CROW;
+    }
+# endif
+    showruler(FALSE);
+    setcursor();
+    emsg_on_display = FALSE;	/* may remove error message now */
 }
 
 /*
@@ -4178,6 +4183,7 @@ ins_compl_get_exp(ini)
     char_u	*dict = NULL;
     int		dict_f = 0;
     compl_T	*old_match;
+    int		set_match_pos;
 
     if (!compl_started)
     {
@@ -4196,6 +4202,7 @@ ins_compl_get_exp(ini)
     for (;;)
     {
 	found_new_match = FAIL;
+	set_match_pos = FALSE;
 
 	/* For ^N/^P pick a new entry from e_cpt if compl_started is off,
 	 * or if found_all says this entry is done.  For ^X^L only use the
@@ -4215,6 +4222,10 @@ ins_compl_get_exp(ini)
 		    dec(&first_match_pos);
 		last_match_pos = first_match_pos;
 		type = 0;
+
+		/* Remember the first match so that the loop stops when we
+		 * wrap and come back there a second time. */
+		set_match_pos = TRUE;
 	    }
 	    else if (vim_strchr((char_u *)"buwU", *e_cpt) != NULL
 		 && (ins_buf = ins_compl_next_buf(ins_buf, *e_cpt)) != curbuf)
@@ -4379,7 +4390,7 @@ ins_compl_get_exp(ini)
 	    if (ins_buf->b_p_inf)
 		p_scs = FALSE;
 
-	    /*	buffers other than curbuf are scanned from the beginning or the
+	    /*	Buffers other than curbuf are scanned from the beginning or the
 	     *	end but never from the middle, thus setting nowrapscan in this
 	     *	buffers is a good idea, on the other hand, we always set
 	     *	wrapscan for curbuf to avoid missing matches -- Acevedo,Webb */
@@ -4406,12 +4417,13 @@ ins_compl_get_exp(ini)
 				 compl_pattern, 1L, SEARCH_KEEP + SEARCH_NFMSG,
 						  RE_LAST, (linenr_T)0, NULL);
 		--msg_silent;
-		if (!compl_started)
+		if (!compl_started || set_match_pos)
 		{
 		    /* set "compl_started" even on fail */
 		    compl_started = TRUE;
 		    first_match_pos = *pos;
 		    last_match_pos = *pos;
+		    set_match_pos = FALSE;
 		}
 		else if (first_match_pos.lnum == last_match_pos.lnum
 				 && first_match_pos.col == last_match_pos.col)
@@ -6950,7 +6962,6 @@ stop_insert(end_insert_pos, esc, nomove)
 	    else if (cc != NUL)
 		++curwin->w_cursor.col;	/* put cursor back on the NUL */
 
-#ifdef FEAT_VISUAL
 	    /* <C-S-Right> may have started Visual mode, adjust the position for
 	     * deleted characters. */
 	    if (VIsual_active && VIsual.lnum == curwin->w_cursor.lnum)
@@ -6960,12 +6971,11 @@ stop_insert(end_insert_pos, esc, nomove)
 		if (VIsual.col > len)
 		{
 		    VIsual.col = len;
-# ifdef FEAT_VIRTUALEDIT
+#ifdef FEAT_VIRTUALEDIT
 		    VIsual.coladd = 0;
-# endif
+#endif
 		}
 	    }
-#endif
 	}
     }
     did_ai = FALSE;
@@ -6980,6 +6990,7 @@ stop_insert(end_insert_pos, esc, nomove)
     if (end_insert_pos != NULL)
     {
 	curbuf->b_op_start = Insstart;
+	curbuf->b_op_start_orig = Insstart_orig;
 	curbuf->b_op_end = *end_insert_pos;
     }
 }
@@ -8161,9 +8172,7 @@ ins_reg()
     int		need_redraw = FALSE;
     int		regname;
     int		literally = 0;
-#ifdef FEAT_VISUAL
     int		vis_active = VIsual_active;
-#endif
 
     /*
      * If we are going to wait for a character, show a '"'.
@@ -8267,11 +8276,9 @@ ins_reg()
     if (need_redraw || stuff_empty())
 	edit_unputchar();
 
-#ifdef FEAT_VISUAL
     /* Disallow starting Visual mode here, would get a weird mode. */
     if (!vis_active && VIsual_active)
 	end_visual_mode();
-#endif
 }
 
 /*
@@ -8314,6 +8321,7 @@ ins_ctrl_g()
 
 		  /* Need to reset Insstart, esp. because a BS that joins
 		   * a line to the previous one must save for undo. */
+		  update_Insstart_orig = FALSE;
 		  Insstart = curwin->w_cursor;
 		  break;
 
@@ -8467,11 +8475,7 @@ ins_esc(count, cmdchar, nomove)
 #endif
 	       )
 	    && (restart_edit == NUL
-		   || (gchar_cursor() == NUL
-#ifdef FEAT_VISUAL
-		       && !VIsual_active
-#endif
-		      ))
+		   || (gchar_cursor() == NUL && !VIsual_active))
 #ifdef FEAT_RIGHTLEFT
 	    && !revins_on
 #endif
@@ -8573,7 +8577,6 @@ ins_ctrl_()
 }
 #endif
 
-#ifdef FEAT_VISUAL
 /*
  * If 'keymodel' contains "startsel", may start selection.
  * Returns TRUE when a CTRL-O and other keys stuffed.
@@ -8629,7 +8632,6 @@ ins_start_select(c)
 	}
     return FALSE;
 }
-#endif
 
 /*
  * <Insert> key in Insert mode: toggle insert/replace mode.

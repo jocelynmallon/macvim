@@ -232,58 +232,78 @@ static int suppress_winsize = 1;	/* don't fiddle with console */
 
 static char_u *exe_path = NULL;
 
+static BOOL win8_or_later = FALSE;
+
 /*
  * Version of ReadConsoleInput() that works with IME.
+ * Works around problems on Windows 8.
  */
     static BOOL
 read_console_input(
-    HANDLE hConsoleInput,
-    PINPUT_RECORD lpBuffer,
-    DWORD nLength,
-    LPDWORD lpNumberOfEventsRead)
+    HANDLE	    hInput,
+    INPUT_RECORD    *lpBuffer,
+    DWORD	    nLength,
+    LPDWORD	    lpEvents)
 {
     enum
     {
-	IRSIZE = 10, /* rough value */
+	IRSIZE = 10
     };
-    static INPUT_RECORD irCache[IRSIZE];
+    static INPUT_RECORD s_irCache[IRSIZE];
     static DWORD s_dwIndex = 0;
     static DWORD s_dwMax = 0;
+    DWORD dwEvents;
+    int head;
+    int tail;
+    int i;
 
-    if (hConsoleInput == NULL || lpBuffer == NULL)
-	return ReadConsoleInput(hConsoleInput, lpBuffer, nLength,
-							lpNumberOfEventsRead);
-
-    if (nLength == -1)
+    if (!win8_or_later)
     {
-	if (s_dwMax == 0)
-	{
-	    PeekConsoleInput(hConsoleInput, lpBuffer, 1, lpNumberOfEventsRead);
-	    if (*lpNumberOfEventsRead == 0)
-		return FALSE;
-	    ReadConsoleInput(hConsoleInput, irCache, IRSIZE, &s_dwMax);
-	    s_dwIndex = 0;
-	}
-	((PINPUT_RECORD)lpBuffer)[0] = irCache[s_dwIndex];
-	*lpNumberOfEventsRead = 1;
-	return TRUE;
+	if (nLength == -1)
+	    return PeekConsoleInput(hInput, lpBuffer, 1, lpEvents);
+	return ReadConsoleInput(hInput, lpBuffer, 1, &dwEvents);
     }
 
     if (s_dwMax == 0)
     {
-	ReadConsoleInput(hConsoleInput, irCache, IRSIZE, &s_dwMax);
-	s_dwIndex = 0;
-	if (s_dwMax == 0)
-	{
-	    *lpNumberOfEventsRead = 0;
+	if (nLength == -1)
+	    return PeekConsoleInput(hInput, lpBuffer, 1, lpEvents);
+	if (!ReadConsoleInput(hInput, s_irCache, IRSIZE, &dwEvents))
 	    return FALSE;
+	s_dwIndex = 0;
+	s_dwMax = dwEvents;
+	if (dwEvents == 0)
+	{
+	    *lpEvents = 0;
+	    return TRUE;
+	}
+
+	if (s_dwMax > 1)
+	{
+	    head = 0;
+	    tail = s_dwMax - 1;
+	    while (head != tail)
+	    {
+		if (s_irCache[head].EventType == WINDOW_BUFFER_SIZE_EVENT
+			&& s_irCache[head + 1].EventType
+						  == WINDOW_BUFFER_SIZE_EVENT)
+		{
+		    /* Remove duplicate event to avoid flicker. */
+		    for (i = head; i < tail; ++i)
+			s_irCache[i] = s_irCache[i + 1];
+		    --tail;
+		    continue;
+		}
+		head++;
+	    }
+	    s_dwMax = tail + 1;
 	}
     }
 
-    ((PINPUT_RECORD)lpBuffer)[0] = irCache[s_dwIndex];
-    if (++s_dwIndex == s_dwMax)
+    *lpBuffer = s_irCache[s_dwIndex];
+    if (nLength != -1 && ++s_dwIndex >= s_dwMax)
 	s_dwMax = 0;
-    *lpNumberOfEventsRead = 1;
+    *lpEvents = 1;
     return TRUE;
 }
 
@@ -292,13 +312,12 @@ read_console_input(
  */
     static BOOL
 peek_console_input(
-    HANDLE hConsoleInput,
-    PINPUT_RECORD lpBuffer,
-    DWORD nLength,
-    LPDWORD lpNumberOfEventsRead)
+    HANDLE	    hInput,
+    INPUT_RECORD    *lpBuffer,
+    DWORD	    nLength,
+    LPDWORD	    lpEvents)
 {
-    return read_console_input(hConsoleInput, lpBuffer, -1,
-							lpNumberOfEventsRead);
+    return read_console_input(hInput, lpBuffer, -1, lpEvents);
 }
 
     static void
@@ -585,10 +604,10 @@ static PSETHANDLEINFORMATION pSetHandleInformation;
     static BOOL
 win32_enable_privilege(LPTSTR lpszPrivilege, BOOL bEnable)
 {
-    BOOL             bResult;
-    LUID             luid;
-    HANDLE           hToken;
-    TOKEN_PRIVILEGES tokenPrivileges;
+    BOOL		bResult;
+    LUID		luid;
+    HANDLE		hToken;
+    TOKEN_PRIVILEGES	tokenPrivileges;
 
     if (!OpenProcessToken(GetCurrentProcess(),
 		TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
@@ -631,6 +650,10 @@ PlatformId(void)
 	GetVersionEx(&ovi);
 
 	g_PlatformId = ovi.dwPlatformId;
+
+	if ((ovi.dwMajorVersion == 6 && ovi.dwMinorVersion >= 2)
+		|| ovi.dwMajorVersion > 6)
+	    win8_or_later = TRUE;
 
 #ifdef HAVE_ACL
 	/*
@@ -1859,7 +1882,7 @@ theend:
  * TODO: Should somehow check if it's really executable.
  */
     static int
-executable_exists(char *name)
+executable_exists(char *name, char_u **path)
 {
     char	*dum;
     char	fname[_MAX_PATH];
@@ -1882,6 +1905,8 @@ executable_exists(char *name)
 		    return FALSE;
 		if (GetFileAttributesW(fnamew) & FILE_ATTRIBUTE_DIRECTORY)
 		    return FALSE;
+		if (path != NULL)
+		    *path = utf16_to_enc(fnamew, NULL);
 		return TRUE;
 	    }
 	    /* Retry with non-wide function (for Windows 98). */
@@ -1892,6 +1917,8 @@ executable_exists(char *name)
 	return FALSE;
     if (mch_isdir(fname))
 	return FALSE;
+    if (path != NULL)
+	*path = vim_strsave(fname);
     return TRUE;
 }
 
@@ -1973,7 +2000,7 @@ mch_init(void)
 	    vimrun_path = (char *)vim_strsave(vimrun_location);
 	    s_dont_use_vimrun = FALSE;
 	}
-	else if (executable_exists("vimrun.exe"))
+	else if (executable_exists("vimrun.exe", NULL))
 	    s_dont_use_vimrun = FALSE;
 
 	/* Don't give the warning for a missing vimrun.exe right now, but only
@@ -1987,7 +2014,7 @@ mch_init(void)
      * If "finstr.exe" doesn't exist, use "grep -n" for 'grepprg'.
      * Otherwise the default "findstr /n" is used.
      */
-    if (!executable_exists("findstr.exe"))
+    if (!executable_exists("findstr.exe", NULL))
 	set_option_value((char_u *)"grepprg", 0, (char_u *)"grep -n", 0);
 
 #ifdef FEAT_CLIPBOARD
@@ -2854,6 +2881,8 @@ mch_get_user_name(
 		return OK;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return FAIL;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2894,6 +2923,8 @@ mch_get_host_name(
 		return;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2943,6 +2974,8 @@ mch_dirname(
 		return OK;
 	    }
 	}
+	else if (GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    return FAIL;
 	/* Retry with non-wide function (for Windows 98). */
     }
 #endif
@@ -2983,7 +3016,7 @@ mch_setperm(char_u *name, long perm)
 	{
 	    n = _wchmod(p, perm);
 	    vim_free(p);
-	    if (n == -1 && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
+	    if (n == -1 && g_PlatformId == VER_PLATFORM_WIN32_NT)
 		return FAIL;
 	    /* Retry with non-wide function (for Windows 98). */
 	}
@@ -3301,7 +3334,7 @@ mch_writable(char_u *name)
  * Return -1 if unknown.
  */
     int
-mch_can_exe(char_u *name)
+mch_can_exe(char_u *name, char_u **path)
 {
     char_u	buf[_MAX_PATH];
     int		len = (int)STRLEN(name);
@@ -3314,7 +3347,7 @@ mch_can_exe(char_u *name)
      * this with a Unix-shell like 'shell'. */
     if (vim_strchr(gettail(name), '.') != NULL
 			       || strstr((char *)gettail(p_sh), "sh") != NULL)
-	if (executable_exists((char *)name))
+	if (executable_exists((char *)name, path))
 	    return TRUE;
 
     /*
@@ -3336,7 +3369,7 @@ mch_can_exe(char_u *name)
 	}
 	else
 	    copy_option_part(&p, buf + len, _MAX_PATH - len, ";");
-	if (executable_exists((char *)buf))
+	if (executable_exists((char *)buf, path))
 	    return TRUE;
     }
     return FALSE;
@@ -4642,6 +4675,7 @@ mch_call_shell(
 	    DWORD		flags = CREATE_NEW_CONSOLE;
 	    char_u		*p;
 
+	    ZeroMemory(&si, sizeof(si));
 	    si.cb = sizeof(si);
 	    si.lpReserved = NULL;
 	    si.lpDesktop = NULL;
@@ -4738,9 +4772,9 @@ mch_call_shell(
 	    if (newcmd != cmdbase)
 		vim_free(newcmd);
 
-	    if (si.hStdInput != NULL)
+	    if (si.dwFlags == STARTF_USESTDHANDLES && si.hStdInput != NULL)
 	    {
-		/* Close the handle to \\.\NUL */
+		/* Close the handle to \\.\NUL created above. */
 		CloseHandle(si.hStdInput);
 	    }
 	    /* Close the handles to the subprocess, so that it goes away */
@@ -6024,7 +6058,7 @@ mch_open(char *name, int flags, int mode)
 	{
 	    f = _wopen(wn, flags, mode);
 	    vim_free(wn);
-	    if (f >= 0)
+	    if (f >= 0 || g_PlatformId == VER_PLATFORM_WIN32_NT)
 		return f;
 	    /* Retry with non-wide function (for Windows 98). Can't use
 	     * GetLastError() here and it's unclear what errno gets set to if
@@ -6075,7 +6109,7 @@ mch_fopen(char *name, char *mode)
 	_set_fmode(oldMode);
 # endif
 
-	if (f != NULL)
+	if (f != NULL || g_PlatformId == VER_PLATFORM_WIN32_NT)
 	    return f;
 	/* Retry with non-wide function (for Windows 98). Can't use
 	 * GetLastError() here and it's unclear what errno gets set to if

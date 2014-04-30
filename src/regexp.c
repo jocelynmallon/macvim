@@ -3709,25 +3709,28 @@ static lpos_T	reg_endzpos[NSUBEXP];	/* idem, end pos */
 /* TRUE if using multi-line regexp. */
 #define REG_MULTI	(reg_match == NULL)
 
-static int  bt_regexec __ARGS((regmatch_T *rmp, char_u *line, colnr_T col));
+static int  bt_regexec_nl __ARGS((regmatch_T *rmp, char_u *line, colnr_T col, int line_lbr));
+
 
 /*
  * Match a regexp against a string.
  * "rmp->regprog" is a compiled regexp as returned by vim_regcomp().
  * Uses curbuf for line count and 'iskeyword'.
+ * if "line_lbr" is TRUE  consider a "\n" in "line" to be a line break.
  *
  * Return TRUE if there is a match, FALSE if not.
  */
     static int
-bt_regexec(rmp, line, col)
+bt_regexec_nl(rmp, line, col, line_lbr)
     regmatch_T	*rmp;
     char_u	*line;	/* string to match against */
     colnr_T	col;	/* column to start looking for match */
+    int		line_lbr;
 {
     reg_match = rmp;
     reg_mmatch = NULL;
     reg_maxline = 0;
-    reg_line_lbr = FALSE;
+    reg_line_lbr = line_lbr;
     reg_buf = curbuf;
     reg_win = NULL;
     ireg_ic = rmp->rm_ic;
@@ -3737,35 +3740,6 @@ bt_regexec(rmp, line, col)
     ireg_maxcol = 0;
     return (bt_regexec_both(line, col, NULL) != 0);
 }
-
-#if defined(FEAT_MODIFY_FNAME) || defined(FEAT_EVAL) \
-	|| defined(FIND_REPLACE_DIALOG) || defined(PROTO)
-
-static int  bt_regexec_nl __ARGS((regmatch_T *rmp, char_u *line, colnr_T col));
-
-/*
- * Like vim_regexec(), but consider a "\n" in "line" to be a line break.
- */
-    static int
-bt_regexec_nl(rmp, line, col)
-    regmatch_T	*rmp;
-    char_u	*line;	/* string to match against */
-    colnr_T	col;	/* column to start looking for match */
-{
-    reg_match = rmp;
-    reg_mmatch = NULL;
-    reg_maxline = 0;
-    reg_line_lbr = TRUE;
-    reg_buf = curbuf;
-    reg_win = NULL;
-    ireg_ic = rmp->rm_ic;
-#ifdef FEAT_MBYTE
-    ireg_icombine = FALSE;
-#endif
-    ireg_maxcol = 0;
-    return (bt_regexec_both(line, col, NULL) != 0);
-}
-#endif
 
 static long bt_regexec_multi __ARGS((regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T lnum, colnr_T col, proftime_T *tm));
 
@@ -4146,7 +4120,8 @@ regtry(prog, col)
 	    {
 		/* Only accept single line matches. */
 		if (reg_startzpos[i].lnum >= 0
-			&& reg_endzpos[i].lnum == reg_startzpos[i].lnum)
+			&& reg_endzpos[i].lnum == reg_startzpos[i].lnum
+			&& reg_endzpos[i].col >= reg_startzpos[i].col)
 		    re_extmatch_out->matches[i] =
 			vim_strnsave(reg_getline(reg_startzpos[i].lnum)
 						       + reg_startzpos[i].col,
@@ -4179,9 +4154,8 @@ reg_prev_class()
 			    - (*mb_head_off)(regline, reginput - 1), reg_buf);
     return -1;
 }
-
 #endif
-#ifdef FEAT_VISUAL
+
 static int reg_match_visual __ARGS((void));
 
 /*
@@ -4258,7 +4232,6 @@ reg_match_visual()
     }
     return TRUE;
 }
-#endif
 
 #define ADVANCE_REGINPUT() mb_ptr_adv(reginput)
 
@@ -4440,9 +4413,7 @@ regmatch(scan)
 	    break;
 
 	  case RE_VISUAL:
-#ifdef FEAT_VISUAL
 	    if (!reg_match_visual())
-#endif
 		status = RA_NOMATCH;
 	    break;
 
@@ -7384,6 +7355,7 @@ vim_regsub(rmp, source, dest, copy, magic, backslash)
     reg_mmatch = NULL;
     reg_maxline = 0;
     reg_buf = curbuf;
+    reg_line_lbr = TRUE;
     return vim_regsub_both(source, dest, copy, magic, backslash);
 }
 #endif
@@ -7403,6 +7375,7 @@ vim_regsub_multi(rmp, lnum, source, dest, copy, magic, backslash)
     reg_buf = curbuf;		/* always works on the current buffer! */
     reg_firstlnum = lnum;
     reg_maxline = curbuf->b_ml.ml_line_count - lnum;
+    reg_line_lbr = FALSE;
     return vim_regsub_both(source, dest, copy, magic, backslash);
 }
 
@@ -7901,17 +7874,92 @@ reg_submatch(no)
 
     return retval;
 }
+
+/*
+ * Used for the submatch() function with the optional non-zero argument: get
+ * the list of strings from the n'th submatch in allocated memory with NULs
+ * represented in NLs.
+ * Returns a list of allocated strings.  Returns NULL when not in a ":s"
+ * command, for a non-existing submatch and for any error.
+ */
+    list_T *
+reg_submatch_list(no)
+    int		no;
+{
+    char_u	*s;
+    linenr_T	slnum;
+    linenr_T	elnum;
+    colnr_T	scol;
+    colnr_T	ecol;
+    int		i;
+    list_T	*list;
+    int		error = FALSE;
+
+    if (!can_f_submatch || no < 0)
+	return NULL;
+
+    if (submatch_match == NULL)
+    {
+	slnum = submatch_mmatch->startpos[no].lnum;
+	elnum = submatch_mmatch->endpos[no].lnum;
+	if (slnum < 0 || elnum < 0)
+	    return NULL;
+
+	scol = submatch_mmatch->startpos[no].col;
+	ecol = submatch_mmatch->endpos[no].col;
+
+	list = list_alloc();
+	if (list == NULL)
+	    return NULL;
+
+	s = reg_getline_submatch(slnum) + scol;
+	if (slnum == elnum)
+	{
+	    if (list_append_string(list, s, ecol - scol) == FAIL)
+		error = TRUE;
+	}
+	else
+	{
+	    if (list_append_string(list, s, -1) == FAIL)
+		error = TRUE;
+	    for (i = 1; i < elnum - slnum; i++)
+	    {
+		s = reg_getline_submatch(slnum + i);
+		if (list_append_string(list, s, -1) == FAIL)
+		    error = TRUE;
+	    }
+	    s = reg_getline_submatch(elnum);
+	    if (list_append_string(list, s, ecol) == FAIL)
+		error = TRUE;
+	}
+    }
+    else
+    {
+	s = submatch_match->startp[no];
+	if (s == NULL || submatch_match->endp[no] == NULL)
+	    return NULL;
+	list = list_alloc();
+	if (list == NULL)
+	    return NULL;
+	if (list_append_string(list, s,
+				 (int)(submatch_match->endp[no] - s)) == FAIL)
+	    error = TRUE;
+    }
+
+    if (error)
+    {
+	list_free(list, TRUE);
+	return NULL;
+    }
+    return list;
+}
 #endif
 
 static regengine_T bt_regengine =
 {
     bt_regcomp,
     bt_regfree,
-    bt_regexec,
-#if defined(FEAT_MODIFY_FNAME) || defined(FEAT_EVAL) \
-	|| defined(FIND_REPLACE_DIALOG) || defined(PROTO)
     bt_regexec_nl,
-#endif
     bt_regexec_multi
 #ifdef DEBUG
     ,(char_u *)""
@@ -7925,11 +7973,7 @@ static regengine_T nfa_regengine =
 {
     nfa_regcomp,
     nfa_regfree,
-    nfa_regexec,
-#if defined(FEAT_MODIFY_FNAME) || defined(FEAT_EVAL) \
-	|| defined(FIND_REPLACE_DIALOG) || defined(PROTO)
     nfa_regexec_nl,
-#endif
     nfa_regexec_multi
 #ifdef DEBUG
     ,(char_u *)""
@@ -8053,7 +8097,7 @@ vim_regexec(rmp, line, col)
     char_u      *line;  /* string to match against */
     colnr_T     col;    /* column to start looking for match */
 {
-    return rmp->regprog->engine->regexec(rmp, line, col);
+    return rmp->regprog->engine->regexec_nl(rmp, line, col, FALSE);
 }
 
 #if defined(FEAT_MODIFY_FNAME) || defined(FEAT_EVAL) \
@@ -8067,7 +8111,7 @@ vim_regexec_nl(rmp, line, col)
     char_u *line;
     colnr_T col;
 {
-    return rmp->regprog->engine->regexec_nl(rmp, line, col);
+    return rmp->regprog->engine->regexec_nl(rmp, line, col, TRUE);
 }
 #endif
 
