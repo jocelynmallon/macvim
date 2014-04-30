@@ -113,7 +113,7 @@ static char_u	*skip_comment __ARGS((char_u *line, int process, int include_space
 #endif
 static void	block_prep __ARGS((oparg_T *oap, struct block_def *, linenr_T, int));
 #if defined(FEAT_CLIPBOARD) || defined(FEAT_EVAL)
-static void	str_to_reg __ARGS((struct yankreg *y_ptr, int type, char_u *str, long len, long blocklen));
+static void	str_to_reg __ARGS((struct yankreg *y_ptr, int yank_type, char_u *str, long len, long blocklen, int str_list));
 #endif
 static int	ends_in_white __ARGS((linenr_T lnum));
 #ifdef FEAT_COMMENTS
@@ -6010,7 +6010,7 @@ clip_yank_selection(type, str, len, cbd)
 
     clip_free_selection(cbd);
 
-    str_to_reg(y_ptr, type, str, len, 0L);
+    str_to_reg(y_ptr, type, str, len, 0L, FALSE);
 }
 
 /*
@@ -6118,7 +6118,7 @@ dnd_yank_drag_data(str, len)
     curr = y_current;
     y_current = &y_regs[TILDE_REGISTER];
     free_yank_all();
-    str_to_reg(y_current, MCHAR, str, len, 0L);
+    str_to_reg(y_current, MCHAR, str, len, 0L, FALSE);
     y_current = curr;
 }
 #endif
@@ -6171,16 +6171,49 @@ get_reg_type(regname, reglen)
     return MAUTO;
 }
 
+static char_u *getreg_wrap_one_line __ARGS((char_u *s, int flags));
+
+/*
+ * When "flags" has GREG_LIST return a list with text "s".
+ * Otherwise just return "s".
+ */
+    static char_u *
+getreg_wrap_one_line(s, flags)
+    char_u	*s;
+    int		flags;
+{
+    if (flags & GREG_LIST)
+    {
+	list_T *list = list_alloc();
+
+	if (list != NULL)
+	{
+	    if (list_append_string(list, NULL, -1) == FAIL)
+	    {
+		list_free(list, TRUE);
+		return NULL;
+	    }
+	    list->lv_first->li_tv.vval.v_string = s;
+	}
+	return (char_u *)list;
+    }
+    return s;
+}
+
 /*
  * Return the contents of a register as a single allocated string.
  * Used for "@r" in expressions and for getreg().
  * Returns NULL for error.
+ * Flags:
+ *	GREG_NO_EXPR	Do not allow expression register
+ *	GREG_EXPR_SRC	For the expression register: return expression itself,
+ *			not the result of its evaluation.
+ *	GREG_LIST	Return a list of lines in place of a single string.
  */
     char_u *
-get_reg_contents(regname, allowexpr, expr_src)
+get_reg_contents(regname, flags)
     int		regname;
-    int		allowexpr;	/* allow "=" register */
-    int		expr_src;	/* get expression for "=" register */
+    int		flags;
 {
     long	i;
     char_u	*retval;
@@ -6190,13 +6223,11 @@ get_reg_contents(regname, allowexpr, expr_src)
     /* Don't allow using an expression register inside an expression */
     if (regname == '=')
     {
-	if (allowexpr)
-	{
-	    if (expr_src)
-		return get_expr_line_src();
-	    return get_expr_line();
-	}
-	return NULL;
+	if (flags & GREG_NO_EXPR)
+	    return NULL;
+	if (flags & GREG_EXPR_SRC)
+	    return getreg_wrap_one_line(get_expr_line_src(), flags);
+	return getreg_wrap_one_line(get_expr_line(), flags);
     }
 
     if (regname == '@')	    /* "@@" is used for unnamed register */
@@ -6214,14 +6245,32 @@ get_reg_contents(regname, allowexpr, expr_src)
     {
 	if (retval == NULL)
 	    return NULL;
-	if (!allocated)
-	    retval = vim_strsave(retval);
-	return retval;
+	if (allocated)
+	    return getreg_wrap_one_line(retval, flags);
+	return getreg_wrap_one_line(vim_strsave(retval), flags);
     }
 
     get_yank_register(regname, FALSE);
     if (y_current->y_array == NULL)
 	return NULL;
+
+    if (flags & GREG_LIST)
+    {
+	list_T	*list = list_alloc();
+	int	error = FALSE;
+
+	if (list == NULL)
+	    return NULL;
+	for (i = 0; i < y_current->y_size; ++i)
+	    if (list_append_string(list, y_current->y_array[i], -1) == FAIL)
+		error = TRUE;
+	if (error)
+	{
+	    list_free(list, TRUE);
+	    return NULL;
+	}
+	return (char_u *)list;
+    }
 
     /*
      * Compute length of resulting string.
@@ -6264,6 +6313,47 @@ get_reg_contents(regname, allowexpr, expr_src)
     return retval;
 }
 
+    static int
+init_write_reg(name, old_y_previous, old_y_current, must_append, yank_type)
+    int		    name;
+    struct yankreg  **old_y_previous;
+    struct yankreg  **old_y_current;
+    int		    must_append;
+    int		    *yank_type UNUSED;
+{
+    if (!valid_yank_reg(name, TRUE))	    /* check for valid reg name */
+    {
+	emsg_invreg(name);
+	return FAIL;
+    }
+
+    /* Don't want to change the current (unnamed) register */
+    *old_y_previous = y_previous;
+    *old_y_current = y_current;
+
+    get_yank_register(name, TRUE);
+    if (!y_append && !must_append)
+	free_yank_all();
+    return OK;
+}
+
+    static void
+finish_write_reg(name, old_y_previous, old_y_current)
+    int		    name;
+    struct yankreg  *old_y_previous;
+    struct yankreg  *old_y_current;
+{
+# ifdef FEAT_CLIPBOARD
+    /* Send text of clipboard register to the clipboard. */
+    may_set_selection();
+# endif
+
+    /* ':let @" = "val"' should change the meaning of the "" register */
+    if (name != '"')
+	y_previous = old_y_previous;
+    y_current = old_y_current;
+}
+
 /*
  * Store string "str" in register "name".
  * "maxlen" is the maximum number of bytes to use, -1 for all bytes.
@@ -6281,6 +6371,51 @@ write_reg_contents(name, str, maxlen, must_append)
     int		must_append;
 {
     write_reg_contents_ex(name, str, maxlen, must_append, MAUTO, 0L);
+}
+
+    void
+write_reg_contents_lst(name, strings, maxlen, must_append, yank_type, block_len)
+    int		name;
+    char_u	**strings;
+    int		maxlen UNUSED;
+    int		must_append;
+    int		yank_type;
+    long	block_len;
+{
+    struct yankreg  *old_y_previous, *old_y_current;
+
+    if (name == '/'
+#ifdef FEAT_EVAL
+	    || name == '='
+#endif
+	    )
+    {
+	char_u	*s;
+
+	if (strings[0] == NULL)
+	    s = (char_u *)"";
+	else if (strings[1] != NULL)
+	{
+	    EMSG(_("E883: search pattern and expression register may not "
+			"contain two or more lines"));
+	    return;
+	}
+	else
+	    s = strings[0];
+	write_reg_contents_ex(name, s, -1, must_append, yank_type, block_len);
+	return;
+    }
+
+    if (name == '_')	    /* black hole: nothing to do */
+	return;
+
+    if (init_write_reg(name, &old_y_previous, &old_y_current, must_append,
+		&yank_type) == FAIL)
+	return;
+
+    str_to_reg(y_current, yank_type, (char_u *) strings, -1, block_len, TRUE);
+
+    finish_write_reg(name, old_y_previous, old_y_current);
 }
 
     void
@@ -6320,40 +6455,22 @@ write_reg_contents_ex(name, str, maxlen, must_append, yank_type, block_len)
 	    s = concat_str(get_expr_line_src(), p);
 	    vim_free(p);
 	    p = s;
-
 	}
 	set_expr_line(p);
 	return;
     }
 #endif
 
-    if (!valid_yank_reg(name, TRUE))	    /* check for valid reg name */
-    {
-	emsg_invreg(name);
-	return;
-    }
-
     if (name == '_')	    /* black hole: nothing to do */
 	return;
 
-    /* Don't want to change the current (unnamed) register */
-    old_y_previous = y_previous;
-    old_y_current = y_current;
+    if (init_write_reg(name, &old_y_previous, &old_y_current, must_append,
+		&yank_type) == FAIL)
+	return;
 
-    get_yank_register(name, TRUE);
-    if (!y_append && !must_append)
-	free_yank_all();
-    str_to_reg(y_current, yank_type, str, len, block_len);
+    str_to_reg(y_current, yank_type, str, len, block_len, FALSE);
 
-# ifdef FEAT_CLIPBOARD
-    /* Send text of clipboard register to the clipboard. */
-    may_set_selection();
-# endif
-
-    /* ':let @" = "val"' should change the meaning of the "" register */
-    if (name != '"')
-	y_previous = old_y_previous;
-    y_current = old_y_current;
+    finish_write_reg(name, old_y_previous, old_y_current);
 }
 #endif	/* FEAT_EVAL */
 
@@ -6363,12 +6480,13 @@ write_reg_contents_ex(name, str, maxlen, must_append, yank_type, block_len)
  * is appended.
  */
     static void
-str_to_reg(y_ptr, yank_type, str, len, blocklen)
+str_to_reg(y_ptr, yank_type, str, len, blocklen, str_list)
     struct yankreg	*y_ptr;		/* pointer to yank register */
     int			yank_type;	/* MCHAR, MLINE, MBLOCK, MAUTO */
     char_u		*str;		/* string to put in register */
     long		len;		/* length of string */
     long		blocklen;	/* width of Visual block */
+    int			str_list;	/* TRUE if str is char_u ** */
 {
     int		type;			/* MCHAR, MLINE or MBLOCK */
     int		lnum;
@@ -6379,6 +6497,7 @@ str_to_reg(y_ptr, yank_type, str, len, blocklen)
     int		extraline = 0;		/* extra line at the end */
     int		append = FALSE;		/* append to last line in register */
     char_u	*s;
+    char_u	**ss;
     char_u	**pp;
     long	maxlen;
 
@@ -6386,7 +6505,8 @@ str_to_reg(y_ptr, yank_type, str, len, blocklen)
 	y_ptr->y_size = 0;
 
     if (yank_type == MAUTO)
-	type = ((len > 0 && (str[len - 1] == NL || str[len - 1] == CAR))
+	type = ((str_list || (len > 0 && (str[len - 1] == NL
+					    || str[len - 1] == CAR)))
 							     ? MLINE : MCHAR);
     else
 	type = yank_type;
@@ -6395,18 +6515,26 @@ str_to_reg(y_ptr, yank_type, str, len, blocklen)
      * Count the number of lines within the string
      */
     newlines = 0;
-    for (i = 0; i < len; i++)
-	if (str[i] == '\n')
+    if (str_list)
+    {
+	for (ss = (char_u **) str; *ss != NULL; ++ss)
 	    ++newlines;
-    if (type == MCHAR || len == 0 || str[len - 1] != '\n')
-    {
-	extraline = 1;
-	++newlines;	/* count extra newline at the end */
     }
-    if (y_ptr->y_size > 0 && y_ptr->y_type == MCHAR)
+    else
     {
-	append = TRUE;
-	--newlines;	/* uncount newline when appending first line */
+	for (i = 0; i < len; i++)
+	    if (str[i] == '\n')
+		++newlines;
+	if (type == MCHAR || len == 0 || str[len - 1] != '\n')
+	{
+	    extraline = 1;
+	    ++newlines;	/* count extra newline at the end */
+	}
+	if (y_ptr->y_size > 0 && y_ptr->y_type == MCHAR)
+	{
+	    append = TRUE;
+	    --newlines;	/* uncount newline when appending first line */
+	}
     }
 
     /*
@@ -6426,40 +6554,53 @@ str_to_reg(y_ptr, yank_type, str, len, blocklen)
     /*
      * Find the end of each line and save it into the array.
      */
-    for (start = 0; start < len + extraline; start += i + 1)
+    if (str_list)
     {
-	for (i = start; i < len; ++i)	/* find the end of the line */
-	    if (str[i] == '\n')
+	for (ss = (char_u **) str; *ss != NULL; ++ss, ++lnum)
+	{
+	    i = STRLEN(*ss);
+	    pp[lnum] = vim_strnsave(*ss, i);
+	    if (i > maxlen)
+		maxlen = i;
+	}
+    }
+    else
+    {
+	for (start = 0; start < len + extraline; start += i + 1)
+	{
+	    for (i = start; i < len; ++i)	/* find the end of the line */
+		if (str[i] == '\n')
+		    break;
+	    i -= start;			/* i is now length of line */
+	    if (i > maxlen)
+		maxlen = i;
+	    if (append)
+	    {
+		--lnum;
+		extra = (int)STRLEN(y_ptr->y_array[lnum]);
+	    }
+	    else
+		extra = 0;
+	    s = alloc((unsigned)(i + extra + 1));
+	    if (s == NULL)
 		break;
-	i -= start;			/* i is now length of line */
-	if (i > maxlen)
-	    maxlen = i;
-	if (append)
-	{
-	    --lnum;
-	    extra = (int)STRLEN(y_ptr->y_array[lnum]);
+	    if (extra)
+		mch_memmove(s, y_ptr->y_array[lnum], (size_t)extra);
+	    if (append)
+		vim_free(y_ptr->y_array[lnum]);
+	    if (i)
+		mch_memmove(s + extra, str + start, (size_t)i);
+	    extra += i;
+	    s[extra] = NUL;
+	    y_ptr->y_array[lnum++] = s;
+	    while (--extra >= 0)
+	    {
+		if (*s == NUL)
+		    *s = '\n';	    /* replace NUL with newline */
+		++s;
+	    }
+	    append = FALSE;		    /* only first line is appended */
 	}
-	else
-	    extra = 0;
-	s = alloc((unsigned)(i + extra + 1));
-	if (s == NULL)
-	    break;
-	if (extra)
-	    mch_memmove(s, y_ptr->y_array[lnum], (size_t)extra);
-	if (append)
-	    vim_free(y_ptr->y_array[lnum]);
-	if (i)
-	    mch_memmove(s + extra, str + start, (size_t)i);
-	extra += i;
-	s[extra] = NUL;
-	y_ptr->y_array[lnum++] = s;
-	while (--extra >= 0)
-	{
-	    if (*s == NUL)
-		*s = '\n';	    /* replace NUL with newline */
-	    ++s;
-	}
-	append = FALSE;		    /* only first line is appended */
     }
     y_ptr->y_type = type;
     y_ptr->y_size = lnum;

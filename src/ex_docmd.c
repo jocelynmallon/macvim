@@ -316,7 +316,6 @@ static void	ex_winpos __ARGS((exarg_T *eap));
 static void	ex_operators __ARGS((exarg_T *eap));
 static void	ex_put __ARGS((exarg_T *eap));
 static void	ex_copymove __ARGS((exarg_T *eap));
-static void	ex_may_print __ARGS((exarg_T *eap));
 static void	ex_submagic __ARGS((exarg_T *eap));
 static void	ex_join __ARGS((exarg_T *eap));
 static void	ex_at __ARGS((exarg_T *eap));
@@ -4581,25 +4580,15 @@ expand_filename(eap, cmdlinep, errormsgp)
 
 	/* For a shell command a '!' must be escaped. */
 	if ((eap->usefilter || eap->cmdidx == CMD_bang)
-			    && vim_strpbrk(repl, (char_u *)"!&;()<>") != NULL)
+			    && vim_strpbrk(repl, (char_u *)"!") != NULL)
 	{
 	    char_u	*l;
 
-	    l = vim_strsave_escaped(repl, (char_u *)"!&;()<>");
+	    l = vim_strsave_escaped(repl, (char_u *)"!");
 	    if (l != NULL)
 	    {
 		vim_free(repl);
 		repl = l;
-		/* For a sh-like shell escape "!" another time. */
-		if (strstr((char *)p_sh, "sh") != NULL)
-		{
-		    l = vim_strsave_escaped(repl, (char_u *)"!");
-		    if (l != NULL)
-		    {
-			vim_free(repl);
-			repl = l;
-		    }
-		}
 	    }
 	}
 
@@ -4852,7 +4841,7 @@ getargcmd(argp)
     if (*arg == '+')	    /* +[command] */
     {
 	++arg;
-	if (vim_isspace(*arg))
+	if (vim_isspace(*arg) || *arg == NUL)
 	    command = dollar_command;
 	else
 	{
@@ -8683,7 +8672,7 @@ ex_copymove(eap)
 /*
  * Print the current line if flags were given to the Ex command.
  */
-    static void
+    void
 ex_may_print(eap)
     exarg_T	*eap;
 {

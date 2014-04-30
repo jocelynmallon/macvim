@@ -3343,6 +3343,12 @@ do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, oldwin)
 #endif
 	    buf = buflist_new(ffname, sfname, 0L,
 		    BLN_CURBUF | ((flags & ECMD_SET_HELP) ? 0 : BLN_LISTED));
+#ifdef FEAT_AUTOCMD
+	    /* autocommands may change curwin and curbuf */
+	    if (oldwin != NULL)
+		oldwin = curwin;
+	    old_curbuf = curbuf;
+#endif
 	}
 	if (buf == NULL)
 	    goto theend;
@@ -4418,6 +4424,31 @@ do_sub(eap)
 	/* Vi compatibility quirk: repeating with ":s" keeps the cursor in the
 	 * last column after using "$". */
 	endcolumn = (curwin->w_curswant == MAXCOL);
+    }
+
+    /* Recognize ":%s/\n//" and turn it into a join command, which is much
+     * more efficient.
+     * TODO: find a generic solution to make line-joining operations more
+     * efficient, avoid allocating a string that grows in size.
+     */
+    if (pat != NULL && STRCMP(pat, "\\n") == 0
+	    && *sub == NUL
+	    && (*cmd == NUL || (cmd[1] == NUL && (*cmd == 'g' || *cmd == 'l'
+					     || *cmd == 'p' || *cmd == '#'))))
+    {
+	curwin->w_cursor.lnum = eap->line1;
+	if (*cmd == 'l')
+	    eap->flags = EXFLAG_LIST;
+	else if (*cmd == '#')
+	    eap->flags = EXFLAG_NR;
+	else if (*cmd == 'p')
+	    eap->flags = EXFLAG_PRINT;
+
+	(void)do_join(eap->line2 - eap->line1 + 1, FALSE, TRUE, FALSE);
+	sub_nlines = sub_nsubs = eap->line2 - eap->line1 + 1;
+	(void)do_sub_msg(FALSE);
+	ex_may_print(eap);
+	return;
     }
 
     /*

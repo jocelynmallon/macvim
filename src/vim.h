@@ -1880,7 +1880,8 @@ typedef int proftime_T;	    /* dummy for function prototypes */
 #define VV_HLSEARCH	54
 #define VV_OLDFILES	55
 #define VV_WINDOWID	56
-#define VV_LEN		57	/* number of v: vars */
+#define VV_PROGPATH	57
+#define VV_LEN		58	/* number of v: vars */
 
 #ifdef FEAT_CLIPBOARD
 
@@ -2257,6 +2258,11 @@ typedef int VimClipboard;	/* This is required for the prototypes. */
 #define SREQ_GLOBAL	0	/* Request global option */
 #define SREQ_WIN	1	/* Request window-local option */
 #define SREQ_BUF	2	/* Request buffer-local option */
+
+/* Flags for get_reg_contents */
+#define GREG_NO_EXPR	1	/* Do not allow expression register */
+#define GREG_EXPR_SRC	2	/* Return expression itself for "=" register */
+#define GREG_LIST	4	/* Return list */
 
 /* Character used as separated in autoload function/variable names. */
 #define AUTOLOAD_CHAR '#'

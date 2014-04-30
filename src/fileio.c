@@ -4030,7 +4030,7 @@ buf_write(buf, fname, sfname, start, end, eap, append, forceit,
 						)
 			    mch_setperm(backup,
 					  (perm & 0707) | ((perm & 07) << 3));
-# ifdef HAVE_SELINUX
+# if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
 			mch_copy_sec(fname, backup);
 # endif
 #endif
@@ -4069,7 +4069,7 @@ buf_write(buf, fname, sfname, start, end, eap, append, forceit,
 #ifdef HAVE_ACL
 			mch_set_acl(backup, acl);
 #endif
-#ifdef HAVE_SELINUX
+#if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
 			mch_copy_sec(fname, backup);
 #endif
 			break;
@@ -4718,7 +4718,7 @@ restore_backup:
     }
 #endif
 
-#ifdef HAVE_SELINUX
+#if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
     /* Probably need to set the security context. */
     if (!backup_copy)
 	mch_copy_sec(backup, wfname);
@@ -6707,7 +6707,7 @@ vim_rename(from, to)
     mch_set_acl(to, acl);
     mch_free_acl(acl);
 #endif
-#ifdef HAVE_SELINUX
+#if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
     mch_copy_sec(from, to);
 #endif
     if (errmsg != NULL)
@@ -9548,13 +9548,19 @@ apply_autocmds_group(event, fname, fname_io, force, group, buf, eap)
 
     /*
      * When stopping to execute autocommands, restore the search patterns and
-     * the redo buffer.
+     * the redo buffer.  Free buffers in the au_pending_free_buf list.
      */
     if (!autocmd_busy)
     {
 	restore_search_patterns();
 	restoreRedobuff();
 	did_filetype = FALSE;
+	while (au_pending_free_buf != NULL)
+	{
+	    buf_T *b = au_pending_free_buf->b_next;
+	    vim_free(au_pending_free_buf);
+	    au_pending_free_buf = b;
+	}
     }
 
     /*
