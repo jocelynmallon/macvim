@@ -4431,7 +4431,7 @@ eval4(arg, rettv, evaluate)
 		    if (rettv->v_type != var2.v_type)
 			EMSG(_("E691: Can only compare List with List"));
 		    else
-			EMSG(_("E692: Invalid operation for Lists"));
+			EMSG(_("E692: Invalid operation for List"));
 		    clear_tv(rettv);
 		    clear_tv(&var2);
 		    return FAIL;
@@ -5998,7 +5998,7 @@ listitem_remove(l, item)
     list_T  *l;
     listitem_T *item;
 {
-    list_remove(l, item, item);
+    vimlist_remove(l, item, item);
     listitem_free(item);
 }
 
@@ -6577,9 +6577,11 @@ list_copy(orig, deep, copyID)
 /*
  * Remove items "item" to "item2" from list "l".
  * Does not free the listitem or the value!
+ * This used to be called list_remove, but that conflicts with a Sun header
+ * file.
  */
     void
-list_remove(l, item, item2)
+vimlist_remove(l, item, item2)
     list_T	*l;
     listitem_T	*item;
     listitem_T	*item2;
@@ -7798,7 +7800,7 @@ string2float(text, value)
  * Get the value of an environment variable.
  * "arg" is pointing to the '$'.  It is advanced to after the name.
  * If the environment variable was not set, silently assume it is empty.
- * Always return OK.
+ * Return FAIL if the name is invalid.
  */
     static int
 get_env_tv(arg, rettv, evaluate)
@@ -7817,32 +7819,33 @@ get_env_tv(arg, rettv, evaluate)
     len = get_env_len(arg);
     if (evaluate)
     {
-	if (len != 0)
-	{
-	    cc = name[len];
-	    name[len] = NUL;
-	    /* first try vim_getenv(), fast for normal environment vars */
-	    string = vim_getenv(name, &mustfree);
-	    if (string != NULL && *string != NUL)
-	    {
-		if (!mustfree)
-		    string = vim_strsave(string);
-	    }
-	    else
-	    {
-		if (mustfree)
-		    vim_free(string);
+	if (len == 0)
+           return FAIL; /* can't be an environment variable */
 
-		/* next try expanding things like $VIM and ${HOME} */
-		string = expand_env_save(name - 1);
-		if (string != NULL && *string == '$')
-		{
-		    vim_free(string);
-		    string = NULL;
-		}
-	    }
-	    name[len] = cc;
+	cc = name[len];
+	name[len] = NUL;
+	/* first try vim_getenv(), fast for normal environment vars */
+	string = vim_getenv(name, &mustfree);
+	if (string != NULL && *string != NUL)
+	{
+	    if (!mustfree)
+		string = vim_strsave(string);
 	}
+	else
+	{
+	    if (mustfree)
+		vim_free(string);
+
+	    /* next try expanding things like $VIM and ${HOME} */
+	    string = expand_env_save(name - 1);
+	    if (string != NULL && *string == '$')
+	    {
+		vim_free(string);
+		string = NULL;
+	    }
+	}
+	name[len] = cc;
+
 	rettv->v_type = VAR_STRING;
 	rettv->vval.v_string = string;
     }
@@ -7982,7 +7985,7 @@ static struct fst
     {"getwinposy",	0, 0, f_getwinposy},
     {"getwinvar",	2, 3, f_getwinvar},
     {"glob",		1, 3, f_glob},
-    {"globpath",	2, 3, f_globpath},
+    {"globpath",	2, 4, f_globpath},
     {"has",		1, 1, f_has},
     {"has_key",		2, 2, f_has_key},
     {"haslocaldir",	0, 0, f_haslocaldir},
@@ -12148,18 +12151,37 @@ f_globpath(argvars, rettv)
     char_u	buf1[NUMBUFLEN];
     char_u	*file = get_tv_string_buf_chk(&argvars[1], buf1);
     int		error = FALSE;
+    garray_T	ga;
+    int		i;
 
     /* When the optional second argument is non-zero, don't remove matches
     * for 'wildignore' and don't put matches for 'suffixes' at the end. */
-    if (argvars[2].v_type != VAR_UNKNOWN
-				&& get_tv_number_chk(&argvars[2], &error))
-	flags |= WILD_KEEP_ALL;
     rettv->v_type = VAR_STRING;
-    if (file == NULL || error)
-	rettv->vval.v_string = NULL;
+    if (argvars[2].v_type != VAR_UNKNOWN)
+    {
+	if (get_tv_number_chk(&argvars[2], &error))
+	    flags |= WILD_KEEP_ALL;
+	if (argvars[3].v_type != VAR_UNKNOWN
+				    && get_tv_number_chk(&argvars[3], &error))
+	{
+	    rettv->v_type = VAR_LIST;
+	    rettv->vval.v_list = NULL;
+	}
+    }
+    if (file != NULL && !error)
+    {
+	ga_init2(&ga, (int)sizeof(char_u *), 10);
+	globpath(get_tv_string(&argvars[0]), file, &ga, flags);
+	if (rettv->v_type == VAR_STRING)
+	    rettv->vval.v_string = ga_concat_strings(&ga, "\n");
+	else if (rettv_list_alloc(rettv) != FAIL)
+	    for (i = 0; i < ga.ga_len; ++i)
+		list_append_string(rettv->vval.v_list,
+					    ((char_u **)(ga.ga_data))[i], -1);
+	ga_clear_strings(&ga);
+    }
     else
-	rettv->vval.v_string = globpath(get_tv_string(&argvars[0]), file,
-								       flags);
+	rettv->vval.v_string = NULL;
 }
 
 /*
@@ -15434,7 +15456,7 @@ f_remove(argvars, rettv)
 	    if (argvars[2].v_type == VAR_UNKNOWN)
 	    {
 		/* Remove one item, return its value. */
-		list_remove(l, item, item);
+		vimlist_remove(l, item, item);
 		*rettv = item->li_tv;
 		vim_free(item);
 	    }
@@ -15460,7 +15482,7 @@ f_remove(argvars, rettv)
 			EMSG(_(e_invrange));
 		    else
 		    {
-			list_remove(l, item, item2);
+			vimlist_remove(l, item, item2);
 			if (rettv_list_alloc(rettv) == OK)
 			{
 			    l = rettv->vval.v_list;
@@ -22275,6 +22297,14 @@ trans_function_name(pp, skip, flags, fdp)
     {
 	name = vim_strsave(name);
 	*pp = end;
+	if (STRNCMP(name, "<SNR>", 5) == 0)
+	{
+	    /* Change "<SNR>" to the byte sequence. */
+	    name[0] = K_SPECIAL;
+	    name[1] = KS_EXTRA;
+	    name[2] = (int)KE_SNR;
+	    mch_memmove(name + 3, name + 5, STRLEN(name + 5) + 1);
+	}
 	goto theend;
     }
 
