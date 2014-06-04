@@ -11313,13 +11313,14 @@ f_getchar(argvars, rettv)
 	    n = safe_vgetc();
 	else if (get_tv_number_chk(&argvars[0], &error) == 1)
 	    /* getchar(1): only check if char avail */
-	    n = vpeekc();
-	else if (error || vpeekc() == NUL)
+	    n = vpeekc_any();
+	else if (error || vpeekc_any() == NUL)
 	    /* illegal argument or getchar(0) and no char avail: return zero */
 	    n = 0;
 	else
 	    /* getchar(0) and char avail: return char */
 	    n = safe_vgetc();
+
 	if (n == K_IGNORE)
 	    continue;
 	break;
@@ -21064,7 +21065,8 @@ var_check_func_name(name, new_var)
     char_u *name;    /* points to start of variable name */
     int    new_var;  /* TRUE when creating the variable */
 {
-    if (!(vim_strchr((char_u *)"wbs", name[0]) != NULL && name[1] == ':')
+    /* Allow for w: b: s: and t:. */
+    if (!(vim_strchr((char_u *)"wbst", name[0]) != NULL && name[1] == ':')
 	    && !ASCII_ISUPPER((name[0] != NUL && name[1] == ':')
 						     ? name[2] : name[0]))
     {
