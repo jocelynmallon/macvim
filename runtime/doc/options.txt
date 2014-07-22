@@ -1,4 +1,4 @@
-*options.txt*	For Vim version 7.4.  Last change: 2014 May 13
+*options.txt*	For Vim version 7.4.  Last change: 2014 Jun 26
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -1199,6 +1199,38 @@ A jump table for the options with a short description can be found at |Q_op|.
 	This option lets you choose which characters might cause a line
 	break if 'linebreak' is on.  Only works for ASCII and also for 8-bit
 	characters when 'encoding' is an 8-bit encoding.
+
+						*'breakindent'* *'bri'*
+'breakindent' 'bri'	boolean (default off)
+			local to window
+			{not in Vi}
+			{not available when compiled without the |+linebreak|
+			feature}
+	Every wrapped line will continue visually indented (same amount of
+	space as the beginning of that line), thus preserving horizontal blocks
+	of text.
+
+						*'breakindentopt'* *'briopt'*
+'breakindentopt' 'briopt' string (default empty)
+			local to window
+			{not in Vi}
+			{not available when compiled without the |+linebreak|
+			feature}
+	Settings for 'breakindent'. It can consist of the following optional
+	items and must be separated by a comma:
+		min:{n}	    Minimum text width that will be kept after
+			    applying 'breakindent', even if the resulting
+			    text should normally be narrower. This prevents
+			    text indented almost to the right window border
+			    occupying lot of vertical space when broken.
+		shift:{n}   After applying 'breakindent', the wrapped line's
+			    beginning will be shifted by the given number of
+			    characters.  It permits dynamic French paragraph
+			    indentation (negative) or emphasizing the line
+			    continuation (positive).
+		sbr	    Display the 'showbreak' value before applying the 
+			    additional indent.
+	The default value for min is 20 and shift is 0.
 
 						*'browsedir'* *'bsdir'*
 'browsedir' 'bsdir'	string	(default: "last")
@@ -3920,12 +3952,13 @@ A jump table for the options with a short description can be found at |Q_op|.
 	NOTE: This option is reset when 'compatible' is set.
 
 						*'history'* *'hi'*
-'history' 'hi'		number	(Vim default: 20, Vi default: 0)
+'history' 'hi'		number	(Vim default: 50, Vi default: 0)
 			global
 			{not in Vi}
 	A history of ":" commands, and a history of previous search patterns
-	are remembered.  This option decides how many entries may be stored in
+	is remembered.  This option decides how many entries may be stored in
 	each of these histories (see |cmdline-editing|).
+	The maximum value is 10000.
 	NOTE: This option is set to the Vi default value when 'compatible' is
 	set and to the Vim default value when 'compatible' is reset.
 
@@ -4574,12 +4607,13 @@ A jump table for the options with a short description can be found at |Q_op|.
 			{not in Vi}
 			{not available when compiled without the |+linebreak|
 			feature}
-	If on Vim will wrap long lines at a character in 'breakat' rather
+	If on, Vim will wrap long lines at a character in 'breakat' rather
 	than at the last character that fits on the screen.  Unlike
 	'wrapmargin' and 'textwidth', this does not insert <EOL>s in the file,
-	it only affects the way the file is displayed, not its contents.  The
-	value of 'showbreak' is used to put in front of wrapped lines.
-	This option is not used when the 'wrap' option is off or 'list' is on.
+	it only affects the way the file is displayed, not its contents.
+	If 'breakindent' is set, line is visually indented. Then, the value
+	of 'showbreak' is used to put in front of wrapped lines. This option
+	is not used when the 'wrap' option is off.
 	Note that <Tab> characters after an <EOL> are mostly not displayed
 	with the right amount of white space.
 
@@ -6254,6 +6288,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  A	don't give the "ATTENTION" message when an existing swap file
 		is found.
 	  I	don't give the intro message when starting Vim |:intro|.
+	  c	don't give |ins-completion-menu| messages.  For example,
+		"-- XXX completion (YYY)", "match 1 of 2", "The only match",
+		"Pattern not found", "Back at original", etc.
 
 	This gives you the opportunity to avoid that a change between buffers
 	requires you to hit <Enter>, but still gives as useful a message as

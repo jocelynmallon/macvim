@@ -91,6 +91,10 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 'bl'	options.txt	/*'bl'*
 'bomb'	options.txt	/*'bomb'*
 'breakat'	options.txt	/*'breakat'*
+'breakindent'	options.txt	/*'breakindent'*
+'breakindentopt'	options.txt	/*'breakindentopt'*
+'bri'	options.txt	/*'bri'*
+'briopt'	options.txt	/*'briopt'*
 'brk'	options.txt	/*'brk'*
 'browsedir'	options.txt	/*'browsedir'*
 'bs'	options.txt	/*'bs'*
@@ -2523,8 +2527,11 @@ $VIMRUNTIME	starting.txt	/*$VIMRUNTIME*
 :noautocmd	autocmd.txt	/*:noautocmd*
 :noh	pattern.txt	/*:noh*
 :nohlsearch	pattern.txt	/*:nohlsearch*
+:nor	map.txt	/*:nor*
+:nore	map.txt	/*:nore*
 :norea	map.txt	/*:norea*
 :noreabbrev	map.txt	/*:noreabbrev*
+:norem	map.txt	/*:norem*
 :noremap	map.txt	/*:noremap*
 :noremap!	map.txt	/*:noremap!*
 :noreme	gui.txt	/*:noreme*
@@ -4316,6 +4323,7 @@ E882	eval.txt	/*E882*
 E883	eval.txt	/*E883*
 E884	eval.txt	/*E884*
 E885	sign.txt	/*E885*
+E886	starting.txt	/*E886*
 E89	message.txt	/*E89*
 E90	message.txt	/*E90*
 E91	options.txt	/*E91*
@@ -4795,6 +4803,7 @@ argidx()	eval.txt	/*argidx()*
 arglist	editing.txt	/*arglist*
 arglist-position	editing.txt	/*arglist-position*
 arglist-quit	usr_07.txt	/*arglist-quit*
+arglistid()	eval.txt	/*arglistid()*
 argument-list	editing.txt	/*argument-list*
 argv()	eval.txt	/*argv()*
 as	motion.txt	/*as*
@@ -6128,6 +6137,7 @@ getcharmod()	eval.txt	/*getcharmod()*
 getcmdline()	eval.txt	/*getcmdline()*
 getcmdpos()	eval.txt	/*getcmdpos()*
 getcmdtype()	eval.txt	/*getcmdtype()*
+getcurpos()	eval.txt	/*getcurpos()*
 getcwd()	eval.txt	/*getcwd()*
 getfontname()	eval.txt	/*getfontname()*
 getfperm()	eval.txt	/*getfperm()*
@@ -6823,6 +6833,7 @@ match()	eval.txt	/*match()*
 match-highlight	pattern.txt	/*match-highlight*
 match-parens	tips.txt	/*match-parens*
 matchadd()	eval.txt	/*matchadd()*
+matchaddpos()	eval.txt	/*matchaddpos()*
 matcharg()	eval.txt	/*matcharg()*
 matchdelete()	eval.txt	/*matchdelete()*
 matchend()	eval.txt	/*matchend()*

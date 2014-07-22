@@ -3330,6 +3330,19 @@ did_request_esc_sequence()
     return crv_status == CRV_SENT || u7_status == U7_SENT
 						|| xt_index_out > xt_index_in;
 }
+
+/*
+ * If requesting the version was disabled in did_request_esc_sequence(),
+ * enable it again.
+ */
+    void
+resume_get_esc_sequence()
+{
+    if (crv_status == 0)
+	crv_status = CRV_GET;
+    if (u7_status == 0)
+	u7_status = U7_GET;
+}
 # endif
 
 
@@ -3711,7 +3724,11 @@ add_termcode(name, string, flags)
 	return;
     }
 
+#if defined(WIN3264) && !defined(FEAT_GUI)
+    s = vim_strnsave(string, (int)STRLEN(string) + 1);
+#else
     s = vim_strsave(string);
+#endif
     if (s == NULL)
 	return;
 
@@ -3721,6 +3738,15 @@ add_termcode(name, string, flags)
 	STRMOVE(s, s + 1);
 	s[0] = term_7to8bit(string);
     }
+
+#if defined(WIN3264) && !defined(FEAT_GUI)
+    if (s[0] == K_NUL)
+    {
+        STRMOVE(s + 1, s);
+        s[1] = 3;
+    }
+#endif
+
     len = (int)STRLEN(s);
 
     need_gather = TRUE;		/* need to fill termleader[] */
