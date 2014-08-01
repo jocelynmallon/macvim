@@ -189,6 +189,13 @@ static char *(features[]) =
 #else
 	"-digraphs",
 #endif
+#ifdef FEAT_GUI_W32
+# ifdef FEAT_DIRECTX
+	"+directx",
+# else
+	"-directx",
+# endif
+#endif
 #ifdef FEAT_DND
 	"+dnd",
 #else
