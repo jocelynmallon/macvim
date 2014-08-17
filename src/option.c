@@ -2124,11 +2124,6 @@ static struct vimoption
     {"remap",	    NULL,   P_BOOL|P_VI_DEF,
 			    (char_u *)&p_remap, PV_NONE,
 			    {(char_u *)TRUE, (char_u *)0L} SCRIPTID_INIT},
-#ifdef FEAT_RENDER_OPTIONS
-    {"renderoptions", "rop", P_STRING|P_COMMA|P_RCLR|P_VI_DEF,
-			    (char_u *)&p_rop, PV_NONE,
-			    {(char_u *)"", (char_u *)0L} SCRIPTID_INIT},
-#endif
     {"report",	    NULL,   P_NUM|P_VI_DEF,
 			    (char_u *)&p_report, PV_NONE,
 			    {(char_u *)2L, (char_u *)0L} SCRIPTID_INIT},
@@ -7001,16 +6996,6 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
     {
 	/* TODO: recognize errors */
 	parse_cino(curbuf);
-    }
-#endif
-
-#if defined(FEAT_GUI) && defined(FEAT_RENDER_OPTIONS)
-    else if (varp == &p_rop && gui.in_use)
-    {
-	int gui_mch_set_rendering_options(char_u *);
-
-	if (!gui_mch_set_rendering_options(p_rop))
-	    errmsg = e_invarg;
     }
 #endif
 

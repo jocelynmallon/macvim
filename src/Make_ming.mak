@@ -31,8 +31,6 @@ DEBUG=no
 OPTIMIZE=MAXSPEED
 # set to yes to make gvim, no for vim
 GUI=yes
-# set to yes if you want to use DirectWrite (DirectX)
-DIRECTX=no
 # FEATURES=[TINY | SMALL  | NORMAL | BIG | HUGE]
 # Set to TINY to make minimal version (few features).
 FEATURES=BIG
@@ -458,14 +456,6 @@ endif
 endif
 endif
 
-# DirectWrite (DirectX)
-ifeq ($(DIRECTX),yes)
-# Only allow DirectWrite for a GUI build.
-ifeq (yes, $(GUI))
-DEFINES += -DFEAT_DIRECTX -DDYNAMIC_DIRECTX
-endif
-endif
-
 # Only allow XPM for a GUI build.
 ifeq (yes, $(GUI))
 
@@ -603,14 +593,6 @@ OBJ += $(OUTDIR)/netbeans.o
 LIB += -lwsock32
 endif
 endif
-ifeq ($(DIRECTX),yes)
-# Only allow DIRECTX for a GUI build.
-ifeq (yes, $(GUI))
-OBJ += $(OUTDIR)/gui_dwrite.o
-LIB += -ld2d1 -ldwrite
-USE_STDCPLUS = yes
-endif
-endif
 ifdef XPM
 # Only allow XPM for a GUI build.
 ifeq (yes, $(GUI))
@@ -668,7 +650,11 @@ endif
 ifeq (yes, $(OLE))
 LIB += -loleaut32
 OBJ += $(OUTDIR)/if_ole.o
-USE_STDCPLUS = yes
+ifeq (yes, $(STATIC_STDCPLUS))
+LIB += -Wl,-Bstatic -lstdc++ -Wl,-Bdynamic
+else
+LIB += -lstdc++
+endif
 endif
 
 ifeq (yes, $(MBYTE))
@@ -690,14 +676,6 @@ LIB += -L$(ICONV)
 CFLAGS += -I$(ICONV)
 endif
 DEFINES+=-DDYNAMIC_ICONV
-endif
-
-ifeq (yes, $(USE_STDCPLUS))
-ifeq (yes, $(STATIC_STDCPLUS))
-LIB += -Wl,-Bstatic -lstdc++ -Wl,-Bdynamic
-else
-LIB += -lstdc++
-endif
 endif
 
 all: $(TARGET) vimrun.exe xxd/xxd.exe install.exe uninstal.exe GvimExt/gvimext.dll
@@ -772,9 +750,6 @@ $(OUTDIR)/ex_eval.o:	ex_eval.c $(INCL) ex_cmds.h
 
 $(OUTDIR)/gui_w32.o:	gui_w32.c gui_w48.c $(INCL)
 	$(CC) -c $(CFLAGS) gui_w32.c -o $(OUTDIR)/gui_w32.o
-
-$(OUTDIR)/gui_dwrite.o:	gui_dwrite.cpp $(INCL) gui_dwrite.h
-	$(CC) -c $(CFLAGS) gui_dwrite.cpp -o $(OUTDIR)/gui_dwrite.o
 
 $(OUTDIR)/if_cscope.o:	if_cscope.c $(INCL) if_cscope.h
 	$(CC) -c $(CFLAGS) if_cscope.c -o $(OUTDIR)/if_cscope.o
