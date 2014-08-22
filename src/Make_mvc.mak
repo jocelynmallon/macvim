@@ -424,6 +424,9 @@ MSVCVER = 11.0
 !if "$(_NMAKE_VER)" == "11.00.60610.1"
 MSVCVER = 11.0
 !endif
+!if "$(_NMAKE_VER)" == "11.00.61030.0"
+MSVCVER = 11.0
+!endif
 !if "$(_NMAKE_VER)" == "12.00.21005.1"
 MSVCVER = 12.0
 !endif
@@ -825,7 +828,12 @@ PERL_INCDIR = $(PERL)\Lib$(PERL_ARCH)\Core
 PERL_LIB = $(PERL_INCDIR)\perl.lib
 !else
 PERL_DLL = perl$(PERL_VER).dll
+!if exist($(PERL_INCDIR)\perl$(PERL_VER).lib)
 PERL_LIB = $(PERL_INCDIR)\perl$(PERL_VER).lib
+!else
+# For ActivePerl 5.18 and later
+PERL_LIB = $(PERL_INCDIR)\libperl$(PERL_VER).a
+!endif
 !endif
 
 CFLAGS = $(CFLAGS) -DFEAT_PERL
@@ -965,6 +973,7 @@ $(VIM).exe: $(OUTDIR) $(OBJ) $(GUI_OBJ) $(OLE_OBJ) $(OLE_IDL) $(MZSCHEME_OBJ) \
 		$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
 		$(TCL_OBJ) $(SNIFF_OBJ) $(CSCOPE_OBJ) $(NETBEANS_OBJ) \
 		$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
+	if exist $(VIM).exe.manifest mt.exe -nologo -manifest $(VIM).exe.manifest -updateresource:$(VIM).exe;1
 
 $(VIM): $(VIM).exe
 

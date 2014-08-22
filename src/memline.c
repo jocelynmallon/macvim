@@ -289,6 +289,9 @@ ml_open(buf)
     buf->b_ml.ml_chunksize = NULL;
 #endif
 
+    if (cmdmod.noswapfile)
+	buf->b_p_swf = FALSE;
+
     /*
      * When 'updatecount' is non-zero swap file may be opened later.
      */
@@ -606,7 +609,7 @@ ml_setname(buf)
 	 * When 'updatecount' is 0 and 'noswapfile' there is no swap file.
 	 * For help files we will make a swap file now.
 	 */
-	if (p_uc != 0)
+	if (p_uc != 0 && !cmdmod.noswapfile)
 	    ml_open_file(buf);	    /* create a swap file */
 	return;
     }
@@ -719,7 +722,7 @@ ml_open_file(buf)
     char_u	*dirp;
 
     mfp = buf->b_ml.ml_mfp;
-    if (mfp == NULL || mfp->mf_fd >= 0 || !buf->b_p_swf)
+    if (mfp == NULL || mfp->mf_fd >= 0 || !buf->b_p_swf || cmdmod.noswapfile)
 	return;		/* nothing to do */
 
 #ifdef FEAT_SPELL
@@ -841,8 +844,11 @@ ml_close_all(del_file)
     for (buf = firstbuf; buf != NULL; buf = buf->b_next)
 	ml_close(buf, del_file && ((buf->b_flags & BF_PRESERVED) == 0
 				 || vim_strchr(p_cpo, CPO_PRESERVE) == NULL));
+#ifdef FEAT_SPELL
+    spell_delete_wordlist();	/* delete the internal wordlist */
+#endif
 #ifdef TEMPDIRNAMES
-    vim_deltempdir();	    /* delete created temp directory */
+    vim_deltempdir();		/* delete created temp directory */
 #endif
 }
 
@@ -4911,7 +4917,7 @@ ml_crypt_prepare(mfp, offset, reading)
 	 * block for the salt. */
 	vim_snprintf((char *)salt, sizeof(salt), "%ld", (long)offset);
 	bf_key_init(key, salt, (int)STRLEN(salt));
-	bf_ofb_init(seed, MF_SEED_LEN);
+	bf_cfb_init(seed, MF_SEED_LEN);
     }
 }
 

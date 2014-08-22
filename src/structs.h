@@ -134,6 +134,12 @@ typedef struct
     int		wo_arab;
 # define w_p_arab w_onebuf_opt.wo_arab	/* 'arabic' */
 #endif
+#ifdef FEAT_LINEBREAK
+    int		wo_bri;
+# define w_p_bri w_onebuf_opt.wo_bri	/* 'breakindent' */
+    char_u		*wo_briopt;
+# define w_p_briopt w_onebuf_opt.wo_briopt /* 'breakindentopt' */
+#endif
 #ifdef FEAT_DIFF
     int		wo_diff;
 # define w_p_diff w_onebuf_opt.wo_diff	/* 'diff' */
@@ -346,9 +352,7 @@ struct u_header
 #endif
     int		uh_flags;	/* see below */
     pos_T	uh_namedm[NMARKS];	/* marks before undo/after redo */
-#ifdef FEAT_VISUAL
     visualinfo_T uh_visual;	/* Visual areas before undo/after redo */
-#endif
     time_t	uh_time;	/* timestamp when the change was made */
     long	uh_save_nr;	/* set when the file was saved after the
 				   changes in this block */
@@ -364,7 +368,7 @@ struct u_header
 /*
  * structures used in undo.c
  */
-#if SIZEOF_INT > 2
+#if VIM_SIZEOF_INT > 2
 # define ALIGN_LONG	/* longword alignment and use filler byte */
 # define ALIGN_SIZE (sizeof(long))
 #else
@@ -471,13 +475,17 @@ struct nr_trans
     blocknr_T	nt_new_bnum;		/* new, positive, number */
 };
 
+
+typedef struct buffblock buffblock_T;
+typedef struct buffheader buffheader_T;
+
 /*
  * structure used to store one block of the stuff/redo/recording buffers
  */
 struct buffblock
 {
-    struct buffblock	*b_next;	/* pointer to next buffblock */
-    char_u		b_str[1];	/* contents (actually longer) */
+    buffblock_T	*b_next;	/* pointer to next buffblock */
+    char_u	b_str[1];	/* contents (actually longer) */
 };
 
 /*
@@ -485,10 +493,10 @@ struct buffblock
  */
 struct buffheader
 {
-    struct buffblock	bh_first;	/* first (dummy) block of list */
-    struct buffblock	*bh_curr;	/* buffblock for appending */
-    int			bh_index;	/* index for reading */
-    int			bh_space;	/* space in bh_curr for appending */
+    buffblock_T	bh_first;	/* first (dummy) block of list */
+    buffblock_T	*bh_curr;	/* buffblock for appending */
+    int		bh_index;	/* index for reading */
+    int		bh_space;	/* space in bh_curr for appending */
 };
 
 /*
@@ -543,6 +551,7 @@ typedef struct
     int		keepjumps;		/* TRUE when ":keepjumps" was used */
     int		lockmarks;		/* TRUE when ":lockmarks" was used */
     int		keeppatterns;		/* TRUE when ":keeppatterns" was used */
+    int		noswapfile;		/* TRUE when ":noswapfile" was used */
 # ifdef FEAT_AUTOCMD
     char_u	*save_ei;		/* saved value of 'eventignore' */
 # endif
@@ -569,7 +578,7 @@ struct memfile
     unsigned	mf_page_size;		/* number of bytes in a page */
     int		mf_dirty;		/* TRUE if there are dirty blocks */
 #ifdef FEAT_CRYPT
-    buf_T	*mf_buffer;		/* bufer this memfile is for */
+    buf_T	*mf_buffer;		/* buffer this memfile is for */
     char_u	mf_seed[MF_SEED_LEN];	/* seed for encryption */
 
     /* Values for key, method and seed used for reading data blocks when
@@ -672,6 +681,7 @@ typedef struct arglist
 {
     garray_T	al_ga;		/* growarray with the array of file names */
     int		al_refcount;	/* number of windows using this arglist */
+    int		id;		/* id of this arglist */
 } alist_T;
 
 /*
@@ -964,7 +974,8 @@ typedef struct
     int			typebuf_valid;	    /* TRUE when save_typebuf valid */
     int			old_char;
     int			old_mod_mask;
-    struct buffheader	save_stuffbuff;
+    buffheader_T	save_readbuf1;
+    buffheader_T	save_readbuf2;
 #ifdef USE_INPUT_BUF
     char_u		*save_inputbuf;
 #endif
@@ -1089,7 +1100,7 @@ typedef struct hashtable_S
 typedef long_u hash_T;		/* Type for hi_hash */
 
 
-#if SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
+#if VIM_SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
 typedef long	varnumber_T;
 #else
 typedef int	varnumber_T;
@@ -1401,12 +1412,10 @@ struct file_buffer
 
     pos_T	b_namedm[NMARKS]; /* current named marks (mark.c) */
 
-#ifdef FEAT_VISUAL
     /* These variables are set when VIsual_active becomes FALSE */
     visualinfo_T b_visual;
-# ifdef FEAT_EVAL
+#ifdef FEAT_EVAL
     int		b_visual_mode_eval;  /* b_visual.vi_mode for visualmode() */
-# endif
 #endif
 
     pos_T	b_last_cursor;	/* cursor position when last unloading this
@@ -1444,6 +1453,7 @@ struct file_buffer
      * start and end of an operator, also used for '[ and ']
      */
     pos_T	b_op_start;
+    pos_T	b_op_start_orig;  /* used for Insstart_orig */
     pos_T	b_op_end;
 
 #ifdef FEAT_VIMINFO
@@ -1637,6 +1647,9 @@ struct file_buffer
 #endif
 #ifdef FEAT_GUI_MACVIM
     int		b_p_mmta;	/* 'macmeta' local value */
+#endif
+#ifdef FEAT_LISP
+    char_u	*b_p_lw;	/* 'lispwords' local value */
 #endif
 
     /* end of buffer options */
@@ -1928,6 +1941,32 @@ typedef struct
 #endif
 } match_T;
 
+/* number of positions supported by matchaddpos() */
+#define MAXPOSMATCH 8
+
+/*
+ * Same as lpos_T, but with additional field len.
+ */
+typedef struct
+{
+    linenr_T	lnum;	/* line number */
+    colnr_T	col;	/* column number */
+    int		len;	/* length: 0 - to the end of line */
+} llpos_T;
+
+/*
+ * posmatch_T provides an array for storing match items for matchaddpos()
+ * function.
+ */
+typedef struct posmatch posmatch_T;
+struct posmatch
+{
+    llpos_T	pos[MAXPOSMATCH];	/* array of positions */
+    int		cur;			/* internal position counter */
+    linenr_T	toplnum;		/* top buffer line */
+    linenr_T	botlnum;		/* bottom buffer line */
+};
+
 /*
  * matchitem_T provides a linked list for storing match items for ":match" and
  * the match functions.
@@ -1941,6 +1980,7 @@ struct matchitem
     char_u	*pattern;   /* pattern to highlight */
     int		hlg_id;	    /* highlight group ID */
     regmmatch_T	match;	    /* regexp program for pattern */
+    posmatch_T	pos;	    /* position matches */
     match_T	hl;	    /* struct for doing the actual highlighting */
 };
 
@@ -1979,7 +2019,6 @@ struct window_S
 				       time through cursupdate() to the
 				       current virtual column */
 
-#ifdef FEAT_VISUAL
     /*
      * the next six are used to update the visual part
      */
@@ -1990,7 +2029,6 @@ struct window_S
     linenr_T	w_old_visual_lnum;  /* last known start of visual part */
     colnr_T	w_old_visual_col;   /* last known start of visual part */
     colnr_T	w_old_curswant;	    /* last known value of Curswant */
-#endif
 
     /*
      * "w_topline", "w_leftcol" and "w_skipcol" specify the offsets for
@@ -2165,6 +2203,11 @@ struct window_S
 #ifdef FEAT_SYN_HL
     int		*w_p_cc_cols;	    /* array of columns to highlight or NULL */
 #endif
+#ifdef FEAT_LINEBREAK
+    int		w_p_brimin;	    /* minimum width for breakindent */
+    int		w_p_brishift;	    /* additional shift for breakindent */
+    int		w_p_brisbr;	    /* sbr in 'briopt' */
+#endif
 
     /* transform a pointer to a "onebuf" option into a "allbuf" option */
 #define GLOBAL_WO(p)	((char *)p + sizeof(winopt_T))
@@ -2292,10 +2335,8 @@ typedef struct oparg_S
 				   (inclusive) */
     int		empty;		/* op_start and op_end the same (only used by
 				   do_change()) */
-#ifdef FEAT_VISUAL
     int		is_VIsual;	/* operator on Visual area */
     int		block_mode;	/* current operator is Visual block mode */
-#endif
     colnr_T	start_vcol;	/* start col for block mode operator */
     colnr_T	end_vcol;	/* end col for block mode operator */
 #ifdef FEAT_AUTOCMD

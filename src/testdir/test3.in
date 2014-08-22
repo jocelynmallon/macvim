@@ -299,20 +299,18 @@ char *(array[100]) = {
 
 enum soppie
 {
-	yes = 0,
-	no,
-	maybe
+yes = 0,
+no,
+maybe
 };
 
 typedef enum soppie
 {
-	yes = 0,
-	no,
-	maybe
+yes = 0,
+no,
+maybe
 };
 
-<<<<<<< HEAD
-=======
 static enum
 {
 yes = 0,
@@ -334,7 +332,6 @@ no,
 maybe
 } soppie;
 
->>>>>>> upstream/master
 {
 	int a,
 		b;
@@ -994,6 +991,24 @@ main ( int first_par, /*
 
 STARTTEST
 :set cin
+:set cino=es,n0s
+/main
+=][
+ENDTEST
+
+main(void)
+{
+	/* Make sure that cino=X0s is not parsed like cino=Xs. */
+	if (cond)
+		foo();
+	else
+	{
+		bar();
+	}
+}
+
+STARTTEST
+:set cin
 :set cino=
 ]]=][
 ENDTEST
@@ -1417,7 +1432,7 @@ int main ()
 
 STARTTEST
 :set cino=(0,ts
-2kdd=][
+2kdd2j=][
 ENDTEST
 
 void func(int a
@@ -1431,7 +1446,7 @@ void func(int a
 
 STARTTEST
 :set cino=(0
-2kdd=][
+2kdd2j=][
 ENDTEST
 
 void
@@ -1446,7 +1461,7 @@ func(int a
 
 STARTTEST
 :set cino&
-2kdd=4][
+2kdd2j=7][
 ENDTEST
 
 void func(void)
@@ -1478,6 +1493,16 @@ void func2(void)
 		printf("This line used to be indented incorrectly.\n");
 }
 
+int foo[]
+#ifdef BAR
+
+= { 1, 2, 3,
+	4, 5, 6 }
+
+#endif
+;
+	int baz;
+
 void func3(void)
 {
 	int tab[] = {
@@ -1485,13 +1510,35 @@ void func3(void)
 	3, 4,
 	5, 6};
 
-printf("Don't you dare indent this line incorrectly!\n);
+printf("Don't you dare indent this line incorrectly!\n");
+}
+
+void
+func4(a, b,
+		c)
+int a;
+int b;
+int c;
+{
+}
+
+void
+func5(
+		int a,
+		int b)
+{
+}
+
+void
+func6(
+		int a)
+{
 }
 
 STARTTEST
 :set cino&
 :set cino+=l1
-2kdd=][
+2kdd2j=][
 ENDTEST
 
 void func(void)
@@ -1520,7 +1567,7 @@ break;
 
 STARTTEST
 :set cino&
-2kdd=][
+2kdd2j=][
 ENDTEST
 
 void func(void)
@@ -1545,7 +1592,7 @@ void func(void)
 
 STARTTEST
 :set cino&
-2kdd=][
+2kdd2j=][
 ENDTEST
 
 void func(void)
@@ -1556,6 +1603,220 @@ void func(void)
 		} else
 			foo(0);
 baz();
+}
+
+STARTTEST
+:set cino=k2s,(0
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func( c1
+	&& (     c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2s,(s
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func(   c1
+	&& (      c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2s,(s,U1
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	c = c1 &&
+	(
+	c2 ||
+	c3
+	) && c4;
+}
+
+STARTTEST
+:set cino=k2s,(0,W4
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	if (   c1
+	&& (   c2
+	|| c3))
+	foo;
+
+	a_long_line(
+	argument,
+	argument);
+	a_short_line(argument,
+	argument);
+}
+
+STARTTEST
+:set cino=k2s,u2
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+}
+
+STARTTEST
+:set cino=k2s,(0,w1
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	&& condition2)
+	action();
+	function(argument1
+	&& argument2);
+
+	if (c1 && (c2 ||
+	c3))
+	foo;
+	if (c1 &&
+	(c2 || c3))
+	{
+	}
+	if (c123456789
+	&& (c22345
+	|| c3))
+	printf("foo\n");
+
+	if (   c1
+	&& (      c2
+	|| c3))
+	foo;
+	func(   c1
+	&& (      c2
+	|| c3))
+	foo;
+}
+
+STARTTEST
+:set cino=k2,(s
+2kdd3j=][
+ENDTEST
+
+void func(void)
+{
+	if (condition1
+	  && condition2)
+		action();
+	function(argument1
+		&& argument2);
+
+	if (c1 && (c2 ||
+		  c3))
+		foo;
+	if (c1 &&
+	  (c2 || c3))
+	{
+	}
 }
 
 STARTTEST
@@ -1658,10 +1919,10 @@ ENDTEST
 
 JSSTART
 var foo = [
-1,  // indent 8 more
+1,
 2,
 3
-];  // indent 8 less
+];
 JSEND
 
 STARTTEST
@@ -1676,7 +1937,7 @@ var foo = [
 1,
 2,
 3
-];  // indent 16 less
+];
 }
 JSEND
 
@@ -1689,6 +1950,12 @@ ENDTEST
 JSSTART
 (function($){
 
+if (cond &&
+cond) {
+stmt;
+}
+window.something.left =
+(width - 50 + offset) + "px";
 var class_name='myclass';
 
 function private_method() {
@@ -1704,15 +1971,15 @@ function init(options) {
 
 $(this).data(class_name+'_public',$.extend({},{
 foo: 'bar',
-bar: 2,  // indent 8 more
-foobar: [  // indent 8 more
-1,  // indent 8 more
-2,  // indent 16 more
-3   // indent 16 more
+bar: 2,
+foobar: [
+1,
+2,
+3
 ],
-callback: function(){  // indent 8 more
-return true;  // indent 8 more
-}  // indent 8 more
+callback: function(){
+return true;
+}
 }, options||{}));
 }
 
@@ -1753,9 +2020,9 @@ $(this).data(class_name+'_public',$.extend({},{
 foo: 'bar',
 bar: 2,
 foobar: [
-1,  // indent 8 more
-2,  // indent 8 more
-3   // indent 8 more
+1,
+2,
+3
 ],
 callback: function(){
 return true;
@@ -1775,15 +2042,15 @@ JSSTART
 function init(options) {
 $(this).data(class_name+'_public',$.extend({},{
 foo: 'bar',
-bar: 2,  // indent 8 more
-foobar: [  // indent 8 more
-1,  // indent 8 more
-2,  // indent 16 more
-3  // indent 16 more
+bar: 2,
+foobar: [
+1,
+2,
+3
 ],
-callback: function(){  // indent 8 more
-return true;  // indent 8 more
-}  // indent 8 more
+callback: function(){
+return true;
+}
 }, options||{}));
 }
 })(jQuery);
