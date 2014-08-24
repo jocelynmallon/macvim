@@ -57,6 +57,15 @@ case "$name" in
 		;;
 esac
 
+tabs=true
+stdinoption=false
+
+#let's see if we need to read from stdin
+#script currently assumes NO PARAMETERS
+if [ -z "$1" ] || [[ $1 == \- ]]; then
+  stdinoption=true
+fi
+
 # Last step:  fire up vim.
 # The program should fork by default when started in GUI mode, but it does
 # not; we work around this when this script is invoked as "gvim" or "rgview"
@@ -66,7 +75,16 @@ if [ "$gui" ]; then
 	# terminal instead of the console log.
 	# But if you use open instead, you will need to fully qualify the
 	# path names for any filenames you specify, which is hard.
-	exec "$binary" -g $opts ${1:+"$@"}
+  if $stdinoption; then
+    exec "$binary" -g -
+  else
+    if $tabs && [ `ps x|grep 'MacOS/MacVim'|grep -v grep|wc -l` = "1" ] && [[ `$binary --serverlist` = "VIM" ]]; then
+      #when using remote tabs you can't pass things like +5.
+      exec "$binary" -g $opts --remote-tab-silent ${1:+"$@"}
+    else
+	    exec "$binary" -g $opts ${1:+"$@"}
+    fi
+  fi
 else
 	exec "$binary" $opts ${1:+"$@"}
 fi
