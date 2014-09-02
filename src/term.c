@@ -3259,7 +3259,7 @@ starttermcap()
 	    may_req_termresponse();
 	    /* Immediately check for a response.  If t_Co changes, we don't
 	     * want to redraw with wrong colors first. */
-	    if (crv_status != CRV_GET)
+	    if (crv_status == CRV_SENT)
 		check_for_codes_from_term();
 	}
 #endif
@@ -3682,7 +3682,11 @@ add_termcode(name, string, flags)
 	return;
     }
 
+#if defined(WIN3264) && !defined(FEAT_GUI)
+    s = vim_strnsave(string, (int)STRLEN(string) + 1);
+#else
     s = vim_strsave(string);
+#endif
     if (s == NULL)
 	return;
 
@@ -3692,6 +3696,15 @@ add_termcode(name, string, flags)
 	STRMOVE(s, s + 1);
 	s[0] = term_7to8bit(string);
     }
+
+#if defined(WIN3264) && !defined(FEAT_GUI)
+    if (s[0] == K_NUL)
+    {
+	STRMOVE(s + 1, s);
+	s[1] = 3;
+    }
+#endif
+
     len = (int)STRLEN(s);
 
     need_gather = TRUE;		/* need to fill termleader[] */
@@ -4157,24 +4170,31 @@ check_termcode(max_offset, buf, bufsize, buflen)
 
 #ifdef FEAT_TERMRESPONSE
 	if (key_name[0] == NUL
-	    /* URXVT mouse uses <ESC>[#;#;#M, but we are matching <ESC>[ */
-	    || key_name[0] == KS_URXVT_MOUSE
-# ifdef FEAT_MBYTE
-	    || u7_status == U7_SENT
+	    /* Mouse codes of DEC, pterm, and URXVT start with <ESC>[.  When
+	     * detecting the start of these mouse codes they might as well be
+	     * another key code or terminal response. */
+# ifdef FEAT_MOUSE_DEC
+	    || key_name[0] == KS_DEC_MOUSE
 # endif
-            )
+# ifdef FEAT_MOUSE_PTERM
+	    || key_name[0] == KS_PTERM_MOUSE
+# endif
+# ifdef FEAT_MOUSE_URXVT
+	    || key_name[0] == KS_URXVT_MOUSE
+# endif
+	   )
 	{
-	    /* Check for some responses from terminal start with "<Esc>[" or
-	     * CSI.
+	    /* Check for some responses from the terminal starting with
+	     * "<Esc>[" or CSI:
 	     *
-	     * - xterm version string: <Esc>[>{x};{vers};{y}c
+	     * - Xterm version string: <Esc>[>{x};{vers};{y}c
 	     *   Also eat other possible responses to t_RV, rxvt returns
 	     *   "<Esc>[?1;2c". Also accept CSI instead of <Esc>[.
 	     *   mrxvt has been reported to have "+" in the version. Assume
 	     *   the escape sequence ends with a letter or one of "{|}~".
 	     *
-	     * - cursor position report: <Esc>[{row};{col}R
-	     *   The final byte is 'R'. now it is only used for checking for
+	     * - Cursor position report: <Esc>[{row};{col}R
+	     *   The final byte must be 'R'. It is used for checking the
 	     *   ambiguous-width character state.
 	     */
 	    p = tp[0] == CSI ? tp + 1 : tp + 2;
@@ -4214,36 +4234,42 @@ check_termcode(max_offset, buf, bufsize, buflen)
 		 * u7_status is not "sent", it may be from a previous Vim that
 		 * just exited.  But not for <S-F3>, it sends something
 		 * similar, check for row and column to make sense. */
-		if (j == 1 && tp[i] == 'R' && row_char == '2' && col >= 2)
+		if (j == 1 && tp[i] == 'R')
 		{
-		    char *aw = NULL;
-
-		    LOG_TR("Received U7 status");
-		    u7_status = U7_GOT;
-# ifdef FEAT_AUTOCMD
-		    did_cursorhold = TRUE;
-# endif
-		    if (col == 2)
-			aw = "single";
-		    else if (col == 3)
-			aw = "double";
-		    if (aw != NULL && STRCMP(aw, p_ambw) != 0)
+		    if (row_char == '2' && col >= 2)
 		    {
-			/* Setting the option causes a screen redraw. Do that
-			 * right away if possible, keeping any messages. */
-			set_option_value((char_u *)"ambw", 0L, (char_u *)aw, 0);
-# ifdef DEBUG_TERMRESPONSE
-			{
-			    char buf[100];
-			    int  r = redraw_asap(CLEAR);
+			char *aw = NULL;
 
-			    sprintf(buf, "set 'ambiwidth', redraw_asap(): %d",
-									   r);
-			    log_tr(buf);
-			}
-# else
-			redraw_asap(CLEAR);
+			LOG_TR("Received U7 status");
+			u7_status = U7_GOT;
+# ifdef FEAT_AUTOCMD
+			did_cursorhold = TRUE;
 # endif
+			if (col == 2)
+			    aw = "single";
+			else if (col == 3)
+			    aw = "double";
+			if (aw != NULL && STRCMP(aw, p_ambw) != 0)
+			{
+			    /* Setting the option causes a screen redraw. Do
+			     * that right away if possible, keeping any
+			     * messages. */
+			    set_option_value((char_u *)"ambw", 0L,
+					     (char_u *)aw, 0);
+# ifdef DEBUG_TERMRESPONSE
+			    {
+				char buf[100];
+				int  r = redraw_asap(CLEAR);
+
+				sprintf(buf,
+					"set 'ambiwidth', redraw_asap(): %d",
+					r);
+				log_tr(buf);
+			    }
+# else
+			    redraw_asap(CLEAR);
+# endif
+			}
 		    }
 		    key_name[0] = (int)KS_EXTRA;
 		    key_name[1] = (int)KE_IGNORE;
@@ -4508,19 +4534,19 @@ check_termcode(max_offset, buf, bufsize, buflen)
 			return -1;
 
 		    /* when mouse reporting is SGR, add 32 to mouse code */
-                    if (key_name[0] == KS_SGR_MOUSE)
-                        mouse_code += 32;
+		    if (key_name[0] == KS_SGR_MOUSE)
+			mouse_code += 32;
 
 		    mouse_col = getdigits(&p) - 1;
 		    if (*p++ != ';')
 			return -1;
 
 		    mouse_row = getdigits(&p) - 1;
-                    if (key_name[0] == KS_SGR_MOUSE && *p == 'm')
+		    if (key_name[0] == KS_SGR_MOUSE && *p == 'm')
 			mouse_code |= MOUSE_RELEASE;
-                    else if (*p != 'M')
+		    else if (*p != 'M')
 			return -1;
-                    p++;
+		    p++;
 
 		    slen += (int)(p - (tp + slen));
 
@@ -4537,7 +4563,7 @@ check_termcode(max_offset, buf, bufsize, buflen)
 			for (slen2 = slen; slen2 < len; slen2++)
 			{
 			    if (tp[slen2] == 'M'
-                                || (key_name[0] == KS_SGR_MOUSE
+				    || (key_name[0] == KS_SGR_MOUSE
 							 && tp[slen2] == 'm'))
 			    {
 				cmd_complete = 1;

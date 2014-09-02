@@ -812,7 +812,7 @@ getcount:
 
     if (text_locked() && (nv_cmds[idx].cmd_flags & NV_NCW))
     {
-	/* This command is not allowed while editing a ccmdline: beep. */
+	/* This command is not allowed while editing a cmdline: beep. */
 	clearopbeep(oap);
 	text_locked_msg();
 	goto normal_end;
@@ -1076,7 +1076,10 @@ getcount:
 #ifdef FEAT_MBYTE
 	    /* When getting a text character and the next character is a
 	     * multi-byte character, it could be a composing character.
-	     * However, don't wait for it to arrive. */
+	     * However, don't wait for it to arrive. Also, do enable mapping,
+	     * because if it's put back with vungetc() it's too late to apply
+	     * mapping. */
+	    --no_mapping;
 	    while (enc_utf8 && lang && (c = vpeekc()) > 0
 				 && (c >= 0x100 || MB_BYTE2LEN(vpeekc()) > 1))
 	    {
@@ -1091,6 +1094,7 @@ getcount:
 		else
 		    ca.ncharC2 = c;
 	    }
+	    ++no_mapping;
 #endif
 	}
 	--no_mapping;
@@ -1905,7 +1909,7 @@ do_pending_operator(cap, old_col, gui_yank)
 	    else
 	    {
 		(void)do_join(oap->line_count, oap->op_type == OP_JOIN,
-								  TRUE, TRUE);
+							    TRUE, TRUE, TRUE);
 		auto_format(FALSE, TRUE);
 	    }
 	    break;
@@ -4505,13 +4509,21 @@ nv_screengo(oap, dir, dist)
 #if defined(FEAT_LINEBREAK) || defined(FEAT_MBYTE)
     if (curwin->w_cursor.col > 0 && curwin->w_p_wrap)
     {
+	colnr_T virtcol;
+
 	/*
 	 * Check for landing on a character that got split at the end of the
 	 * last line.  We want to advance a screenline, not end up in the same
 	 * screenline or move two screenlines.
 	 */
 	validate_virtcol();
-	if (curwin->w_virtcol > curwin->w_curswant
+	virtcol = curwin->w_virtcol;
+# if defined(FEAT_LINEBREAK)
+	if (virtcol > (colnr_T)width1 && *p_sbr != NUL)
+	    virtcol -= vim_strsize(p_sbr);
+# endif
+
+	if (virtcol > curwin->w_curswant
 		&& (curwin->w_curswant < (colnr_T)width1
 		    ? (curwin->w_curswant > (colnr_T)width1 / 2)
 		    : ((curwin->w_curswant - width1) % width2
@@ -9236,7 +9248,7 @@ nv_join(cap)
 	{
 	    prep_redo(cap->oap->regname, cap->count0,
 			 NUL, cap->cmdchar, NUL, NUL, cap->nchar);
-	    (void)do_join(cap->count0, cap->nchar == NUL, TRUE, TRUE);
+	    (void)do_join(cap->count0, cap->nchar == NUL, TRUE, TRUE, TRUE);
 	}
     }
 }

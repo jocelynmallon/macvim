@@ -322,6 +322,7 @@ main
     init_yank();		/* init yank buffers */
 
     alist_init(&global_alist);	/* Init the argument list to empty. */
+    global_alist.id = 0;
 
     /*
      * Set the default values for the options.
@@ -845,8 +846,7 @@ vim_main2(int argc UNUSED, char **argv UNUSED)
 #ifdef FEAT_CRYPT
     if (params.ask_for_key)
     {
-	(void)blowfish_self_test();
-	(void)get_crypt_key(TRUE, TRUE);
+	(void)crypt_get_key(TRUE, TRUE);
 	TIME_MSG("getting crypt key");
     }
 #endif

@@ -420,7 +420,9 @@ shift_block(oap, amount)
 	}
 	for ( ; vim_iswhite(*bd.textstart); )
 	{
-	    incr = lbr_chartabsize_adv(&bd.textstart, (colnr_T)(bd.start_vcol));
+	    /* TODO: is passing bd.textstart for start of the line OK? */
+	    incr = lbr_chartabsize_adv(bd.textstart, &bd.textstart,
+						    (colnr_T)(bd.start_vcol));
 	    total += incr;
 	    bd.start_vcol += incr;
 	}
@@ -480,7 +482,7 @@ shift_block(oap, amount)
 
 	while (vim_iswhite(*non_white))
 	{
-	    incr = lbr_chartabsize_adv(&non_white, non_white_col);
+	    incr = lbr_chartabsize_adv(bd.textstart, &non_white, non_white_col);
 	    non_white_col += incr;
 	}
 
@@ -505,7 +507,11 @@ shift_block(oap, amount)
 	    verbatim_copy_width -= bd.start_char_vcols;
 	while (verbatim_copy_width < destination_col)
 	{
-	    incr = lbr_chartabsize(verbatim_copy_end, verbatim_copy_width);
+	    char_u *line = verbatim_copy_end;
+
+	    /* TODO: is passing verbatim_copy_end for start of the line OK? */
+	    incr = lbr_chartabsize(line, verbatim_copy_end,
+							 verbatim_copy_width);
 	    if (verbatim_copy_width + incr > destination_col)
 		break;
 	    verbatim_copy_width += incr;
@@ -602,6 +608,26 @@ block_insert(oap, s, b_insert, bdp)
 		offset = bdp->textcol + bdp->textlen;
 	    }
 	}
+
+#ifdef FEAT_MBYTE
+	if (has_mbyte && spaces > 0)
+	{
+	    /* Avoid starting halfway a multi-byte character. */
+	    if (b_insert)
+	    {
+		int off = (*mb_head_off)(oldp, oldp + offset + spaces);
+		spaces -= off;
+		count -= off;
+	    }
+	    else
+	    {
+		int off = (*mb_off_next)(oldp, oldp + offset);
+		offset += off;
+		spaces = 0;
+		count = 0;
+	    }
+	}
+#endif
 
 	newp = alloc_check((unsigned)(STRLEN(oldp)) + s_len + count + 1);
 	if (newp == NULL)
@@ -1591,9 +1617,15 @@ adjust_clip_reg(rp)
 {
     /* If no reg. specified, and "unnamed" or "unnamedplus" is in 'clipboard',
      * use '*' or '+' reg, respectively. "unnamedplus" prevails. */
-    if (*rp == 0 && clip_unnamed != 0)
-	*rp = ((clip_unnamed & CLIP_UNNAMED_PLUS) && clip_plus.available)
+    if (*rp == 0 && (clip_unnamed != 0 || clip_unnamed_saved != 0))
+    {
+	if (clip_unnamed != 0)
+	    *rp = ((clip_unnamed & CLIP_UNNAMED_PLUS) && clip_plus.available)
 								  ? '+' : '*';
+	else
+	    *rp = ((clip_unnamed_saved & CLIP_UNNAMED_PLUS) && clip_plus.available)
+								  ? '+' : '*';
+    }
     if (!clip_star.available && *rp == '*')
 	*rp = 0;
     if (!clip_plus.available && *rp == '+')
@@ -1979,7 +2011,7 @@ op_delete(oap)
 		curwin->w_cursor = curpos;	/* restore curwin->w_cursor */
 	    }
 	    if (curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count)
-		(void)do_join(2, FALSE, FALSE, FALSE);
+		(void)do_join(2, FALSE, FALSE, FALSE, FALSE);
 	}
     }
 
@@ -3150,6 +3182,8 @@ op_yank(oap, deleting, mess)
 	vim_free(y_current->y_array);
 	y_current = curr;
     }
+    if (curwin->w_p_rnu)
+	redraw_later(SOME_VALID);	/* cursor moved to start */
     if (mess)			/* Display message about yank? */
     {
 	if (yanktype == MCHAR
@@ -3195,7 +3229,7 @@ op_yank(oap, deleting, mess)
     if (clip_star.available
 	    && (curr == &(y_regs[STAR_REGISTER])
 		|| (!deleting && oap->regname == 0
-					   && (clip_unnamed & CLIP_UNNAMED))))
+		   && ((clip_unnamed | clip_unnamed_saved) & CLIP_UNNAMED))))
     {
 	if (curr != &(y_regs[STAR_REGISTER]))
 	    /* Copy the text from register 0 to the clipboard register. */
@@ -3216,7 +3250,8 @@ op_yank(oap, deleting, mess)
     if (clip_plus.available
 	    && (curr == &(y_regs[PLUS_REGISTER])
 		|| (!deleting && oap->regname == 0
-				      && (clip_unnamed & CLIP_UNNAMED_PLUS))))
+		  && ((clip_unnamed | clip_unnamed_saved) &
+		      CLIP_UNNAMED_PLUS))))
     {
 	if (curr != &(y_regs[PLUS_REGISTER]))
 	    /* Copy the text from register 0 to the clipboard register. */
@@ -3615,7 +3650,7 @@ do_put(regname, dir, count, flags)
 	    for (ptr = oldp; vcol < col && *ptr; )
 	    {
 		/* Count a tab for what it's worth (if list mode not on) */
-		incr = lbr_chartabsize_adv(&ptr, (colnr_T)vcol);
+		incr = lbr_chartabsize_adv(oldp, &ptr, (colnr_T)vcol);
 		vcol += incr;
 	    }
 	    bd.textcol = (colnr_T)(ptr - oldp);
@@ -3649,7 +3684,7 @@ do_put(regname, dir, count, flags)
 	    /* calculate number of spaces required to fill right side of block*/
 	    spaces = y_width + 1;
 	    for (j = 0; j < yanklen; j++)
-		spaces -= lbr_chartabsize(&y_array[i][j], 0);
+		spaces -= lbr_chartabsize(NULL, &y_array[i][j], 0);
 	    if (spaces < 0)
 		spaces = 0;
 
@@ -4323,17 +4358,20 @@ skip_comment(line, process, include_space, is_comment)
 /*
  * Join 'count' lines (minimal 2) at cursor position.
  * When "save_undo" is TRUE save lines for undo first.
- * Set "use_formatoptions" to FALSE when e.g. processing
- * backspace and comment leaders should not be removed.
+ * Set "use_formatoptions" to FALSE when e.g. processing backspace and comment
+ * leaders should not be removed.
+ * When setmark is TRUE, sets the '[ and '] mark, else, the caller is expected
+ * to set those marks.
  *
  * return FAIL for failure, OK otherwise
  */
     int
-do_join(count, insert_space, save_undo, use_formatoptions)
+do_join(count, insert_space, save_undo, use_formatoptions, setmark)
     long    count;
     int	    insert_space;
     int	    save_undo;
     int	    use_formatoptions UNUSED;
+    int	    setmark;
 {
     char_u	*curr = NULL;
     char_u      *curr_start = NULL;
@@ -4384,7 +4422,7 @@ do_join(count, insert_space, save_undo, use_formatoptions)
     for (t = 0; t < count; ++t)
     {
 	curr = curr_start = ml_get((linenr_T)(curwin->w_cursor.lnum + t));
-	if (t == 0)
+	if (t == 0 && setmark)
 	{
 	    /* Set the '[ mark. */
 	    curwin->w_buffer->b_op_start.lnum = curwin->w_cursor.lnum;
@@ -4511,9 +4549,12 @@ do_join(count, insert_space, save_undo, use_formatoptions)
     }
     ml_replace(curwin->w_cursor.lnum, newp, FALSE);
 
-    /* Set the '] mark. */
-    curwin->w_buffer->b_op_end.lnum = curwin->w_cursor.lnum;
-    curwin->w_buffer->b_op_end.col  = (colnr_T)STRLEN(newp);
+    if (setmark)
+    {
+	/* Set the '] mark. */
+	curwin->w_buffer->b_op_end.lnum = curwin->w_cursor.lnum;
+	curwin->w_buffer->b_op_end.col  = (colnr_T)STRLEN(newp);
+    }
 
     /* Only report the change in the first line here, del_lines() will report
      * the deleted line. */
@@ -5014,7 +5055,7 @@ format_lines(line_count, avoid_fex)
 		    }
 		}
 		curwin->w_cursor.lnum--;
-		if (do_join(2, TRUE, FALSE, FALSE) == FAIL)
+		if (do_join(2, TRUE, FALSE, FALSE, FALSE) == FAIL)
 		{
 		    beep_flush();
 		    break;
@@ -5200,7 +5241,7 @@ block_prep(oap, bdp, lnum, is_del)
     while (bdp->start_vcol < oap->start_vcol && *pstart)
     {
 	/* Count a tab for what it's worth (if list mode not on) */
-	incr = lbr_chartabsize(pstart, (colnr_T)bdp->start_vcol);
+	incr = lbr_chartabsize(line, pstart, (colnr_T)bdp->start_vcol);
 	bdp->start_vcol += incr;
 #ifdef FEAT_VISUALEXTRA
 	if (vim_iswhite(*pstart))
@@ -5269,7 +5310,10 @@ block_prep(oap, bdp, lnum, is_del)
 	    {
 		/* Count a tab for what it's worth (if list mode not on) */
 		prev_pend = pend;
-		incr = lbr_chartabsize_adv(&pend, (colnr_T)bdp->end_vcol);
+		/* TODO: is passing prev_pend for start of the line OK?
+		 * perhaps it should be "line". */
+		incr = lbr_chartabsize_adv(prev_pend, &pend,
+						      (colnr_T)bdp->end_vcol);
 		bdp->end_vcol += incr;
 	    }
 	    if (bdp->end_vcol <= oap->end_vcol
@@ -6558,7 +6602,7 @@ str_to_reg(y_ptr, yank_type, str, len, blocklen, str_list)
     {
 	for (ss = (char_u **) str; *ss != NULL; ++ss, ++lnum)
 	{
-	    i = STRLEN(*ss);
+	    i = (long)STRLEN(*ss);
 	    pp[lnum] = vim_strnsave(*ss, i);
 	    if (i > maxlen)
 		maxlen = i;
@@ -6879,7 +6923,8 @@ cursor_pos_info()
 	    validate_virtcol();
 	    col_print(buf1, sizeof(buf1), (int)curwin->w_cursor.col + 1,
 		    (int)curwin->w_virtcol + 1);
-	    col_print(buf2, sizeof(buf2), (int)STRLEN(p), linetabsize(p));
+	    col_print(buf2, sizeof(buf2), (int)STRLEN(p),
+				linetabsize(p));
 
 	    if (char_count_cursor == byte_count_cursor
 		    && char_count == byte_count)

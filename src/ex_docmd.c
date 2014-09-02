@@ -2143,6 +2143,26 @@ do_one_cmd(cmdlinep, sourcing,
     /* Find the command and let "p" point to after it. */
     p = find_command(&ea, NULL);
 
+#ifdef FEAT_AUTOCMD
+    /* If this looks like an undefined user command and there are CmdUndefined
+     * autocommands defined, trigger the matching autocommands. */
+    if (p != NULL && ea.cmdidx == CMD_SIZE && !ea.skip
+	    && ASCII_ISUPPER(*ea.cmd)
+	    && has_cmdundefined())
+    {
+	int ret;
+
+	p = ea.cmd;
+	while (ASCII_ISALNUM(*p))
+	    ++p;
+	p = vim_strnsave(ea.cmd, p - ea.cmd);
+	ret = apply_autocmds(EVENT_CMDUNDEFINED, p, p, TRUE, NULL);
+	vim_free(p);
+	if (ret && !aborting())
+	    p = find_command(&ea, NULL);
+    }
+#endif
+
 #ifdef FEAT_USR_CMDS
     if (p == NULL)
     {
@@ -7211,6 +7231,7 @@ alist_new()
     else
     {
 	curwin->w_alist->al_refcount = 1;
+	curwin->w_alist->id = ++max_alist_id;
 	alist_init(curwin->w_alist);
     }
 }
@@ -8717,7 +8738,7 @@ ex_join(eap)
 	}
 	++eap->line2;
     }
-    (void)do_join(eap->line2 - eap->line1 + 1, !eap->forceit, TRUE, TRUE);
+    (void)do_join(eap->line2 - eap->line1 + 1, !eap->forceit, TRUE, TRUE, TRUE);
     beginline(BL_WHITE | BL_FIX);
     ex_may_print(eap);
 }
@@ -10290,6 +10311,7 @@ makeopens(fd, dirnow)
     char_u	*sname;
     win_T	*edited_win = NULL;
     int		tabnr;
+    int		restore_stal = FALSE;
     win_T	*tab_firstwin;
     frame_T	*tab_topframe;
     int		cur_arg_idx = 0;
@@ -10397,6 +10419,19 @@ makeopens(fd, dirnow)
 	}
     }
 #endif
+
+    /*
+     * When there are two or more tabpages and 'showtabline' is 1 the tabline
+     * will be displayed when creating the next tab.  That resizes the windows
+     * in the first tab, which may cause problems.  Set 'showtabline' to 2
+     * temporarily to avoid that.
+     */
+    if (p_stal == 1 && first_tabpage->tp_next != NULL)
+    {
+	if (put_line(fd, "set stal=2") == FAIL)
+	    return FAIL;
+	restore_stal = TRUE;
+    }
 
     /*
      * May repeat putting Windows for each tab, when "tabpages" is in
@@ -10548,6 +10583,8 @@ makeopens(fd, dirnow)
 		|| put_eol(fd) == FAIL)
 	    return FAIL;
     }
+    if (restore_stal && put_line(fd, "set stal=1") == FAIL)
+	return FAIL;
 
     /*
      * Wipe out an empty unnamed buffer we started in.
@@ -11472,7 +11509,7 @@ ex_match(eap)
 
 	    c = *end;
 	    *end = NUL;
-	    match_add(curwin, g, p + 1, 10, id);
+	    match_add(curwin, g, p + 1, 10, id, NULL);
 	    vim_free(g);
 	    *end = c;
 	}
@@ -11489,8 +11526,7 @@ ex_match(eap)
 ex_X(eap)
     exarg_T	*eap UNUSED;
 {
-    if (get_crypt_method(curbuf) == 0 || blowfish_self_test() == OK)
-	(void)get_crypt_key(TRUE, TRUE);
+    (void)crypt_get_key(TRUE, TRUE);
 }
 #endif
 
@@ -11517,6 +11553,10 @@ ex_folddo(eap)
 {
     linenr_T	lnum;
 
+#ifdef FEAT_CLIPBOARD
+    start_global_changes();
+#endif
+
     /* First set the marks for all lines closed/open. */
     for (lnum = eap->line1; lnum <= eap->line2; ++lnum)
 	if (hasFolding(lnum, NULL, NULL) == (eap->cmdidx == CMD_folddoclosed))
@@ -11525,5 +11565,8 @@ ex_folddo(eap)
     /* Execute the command on the marked lines. */
     global_exe(eap->arg);
     ml_clearmarked();	   /* clear rest of the marks */
+#ifdef FEAT_CLIPBOARD
+    end_global_changes();
+#endif
 }
 #endif

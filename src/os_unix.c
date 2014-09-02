@@ -3711,7 +3711,7 @@ check_mouse_termcode()
 # endif
 
 # ifdef FEAT_MOUSE_JSB
-    /* conflicts with xterm mouse: "\033[" and "\033[M" ??? */
+    /* Conflicts with xterm mouse: "\033[" and "\033[M" ??? */
     if (!use_xterm_mouse()
 #  ifdef FEAT_GUI
 	    && !gui.in_use
@@ -3738,7 +3738,7 @@ check_mouse_termcode()
 # endif
 
 # ifdef FEAT_MOUSE_DEC
-    /* conflicts with xterm mouse: "\033[" and "\033[M" */
+    /* Conflicts with xterm mouse: "\033[" and "\033[M" */
     if (!use_xterm_mouse()
 #  ifdef FEAT_GUI
 	    && !gui.in_use
@@ -3750,7 +3750,7 @@ check_mouse_termcode()
 	del_mouse_termcode(KS_DEC_MOUSE);
 # endif
 # ifdef FEAT_MOUSE_PTERM
-    /* same as the dec mouse */
+    /* same conflict as the dec mouse */
     if (!use_xterm_mouse()
 #  ifdef FEAT_GUI
 	    && !gui.in_use
@@ -3762,7 +3762,7 @@ check_mouse_termcode()
 	del_mouse_termcode(KS_PTERM_MOUSE);
 # endif
 # ifdef FEAT_MOUSE_URXVT
-    /* same as the dec mouse */
+    /* same conflict as the dec mouse */
     if (use_xterm_mouse() == 3
 #  ifdef FEAT_GUI
 	    && !gui.in_use
@@ -3783,7 +3783,7 @@ check_mouse_termcode()
 	del_mouse_termcode(KS_URXVT_MOUSE);
 # endif
 # ifdef FEAT_MOUSE_SGR
-    /* same as the dec mouse */
+    /* There is no conflict with xterm mouse */
     if (use_xterm_mouse() == 4
 #  ifdef FEAT_GUI
 	    && !gui.in_use
@@ -5939,10 +5939,12 @@ mch_expand_wildcards(num_pat, pat, num_file, file, flags)
 			*p++ = '\\';
 		    ++j;
 		}
-		else if (!intick && vim_strchr(SHELL_SPECIAL,
-							   pat[i][j]) != NULL)
+		else if (!intick
+			 && ((flags & EW_KEEPDOLLAR) == 0 || pat[i][j] != '$')
+			      && vim_strchr(SHELL_SPECIAL, pat[i][j]) != NULL)
 		    /* Put a backslash before a special character, but not
-		     * when inside ``. */
+		     * when inside ``. And not for $var when EW_KEEPDOLLAR is
+		     * set. */
 		    *p++ = '\\';
 
 		/* Copy one character. */

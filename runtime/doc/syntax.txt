@@ -1,4 +1,4 @@
-*syntax.txt*	For Vim version 7.4.  Last change: 2014 Apr 05
+*syntax.txt*	For Vim version 7.4.  Last change: 2014 Aug 29
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -501,7 +501,7 @@ inserted for that purpose if no line numbers are shown. This ID attribute
 takes the form of L123 for single-buffer HTML pages, or W2L123 for diff-view
 pages, and is used to jump to a specific line (in a specific window of a diff
 view). Javascript is inserted to open any closed dynamic folds
-(|g:html_dynamic_folds|) containing the specificed line before jumping. The
+(|g:html_dynamic_folds|) containing the specified line before jumping. The
 javascript also allows omitting the window ID in the url, and the leading L.
 For example: >
 
@@ -1688,7 +1688,7 @@ vimrc file: >
 HTML comments are rather special (see an HTML reference document for the
 details), and the syntax coloring scheme will highlight all errors.
 However, if you prefer to use the wrong style (starts with <!-- and
-ends with --!>) you can define >
+ends with -->) you can define >
 	:let html_wrong_comments=1
 
 JavaScript and Visual Basic embedded inside HTML documents are highlighted as
@@ -2279,7 +2279,7 @@ files, you may set the 'perl_include_pod' option to 0: >
 
 	:let perl_include_pod = 0
 
-The reduce the complexity of parsing (and increase performance) you can switch
+To reduce the complexity of parsing (and increase performance) you can switch
 off two elements in the parsing of variable names and contents. >
 
 To handle package references in variable and function names not differently

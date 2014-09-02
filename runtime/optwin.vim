@@ -1,7 +1,7 @@
 " These commands create the option window.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2014 Apr 01
+" Last Change:	2014 Aug 06
 
 " If there already is an option window, jump to that one.
 if bufwinnr("option-window") > 0
@@ -324,6 +324,12 @@ call <SID>BinOptionG("wrap", &wrap)
 call append("$", "linebreak\twrap long lines at a character in 'breakat'")
 call append("$", "\t(local to window)")
 call <SID>BinOptionL("lbr")
+call append("$", "breakindent\tpreserve indentation in wrapped text")
+call append("$", "\t(local to window)")
+call <SID>BinOptionL("bri")
+call append("$", "breakindentopt\tadjust breakindent behaviour")
+call append("$", "\t(local to window)")
+call <SID>OptionL("briopt")
 call append("$", "breakat\twhich characters might cause a line break")
 call <SID>OptionG("brk", &brk)
 call append("$", "showbreak\tstring to put before wrapped screen lines")
@@ -599,6 +605,10 @@ if has("gui")
     endif
     call append("$", "guiheadroom\troom (in pixels) left above/below the window")
     call append("$", " \tset ghr=" . &ghr)
+  endif
+  if has("directx")
+    call append("$", "renderoptions\toptions for text rendering")
+    call <SID>OptionG("rop", &rop)
   endif
   call append("$", "guipty\tuse a pseudo-tty for I/O to external commands")
   call <SID>BinOptionG("guipty", &guipty)

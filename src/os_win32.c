@@ -619,7 +619,7 @@ win32_enable_privilege(LPTSTR lpszPrivilege, BOOL bEnable)
 	return FALSE;
     }
 
-    tokenPrivileges.PrivilegeCount           = 1;
+    tokenPrivileges.PrivilegeCount	     = 1;
     tokenPrivileges.Privileges[0].Luid       = luid;
     tokenPrivileges.Privileges[0].Attributes = bEnable ?
 						    SE_PRIVILEGE_ENABLED : 0;
@@ -1785,13 +1785,14 @@ mch_inchar(
 #endif
 	    {
 		int	n = 1;
+		int     conv = FALSE;
 
-		/* A key may have one or two bytes. */
 		typeahead[typeaheadlen] = c;
 		if (ch2 != NUL)
 		{
-		    typeahead[typeaheadlen + 1] = ch2;
-		    ++n;
+		    typeahead[typeaheadlen + 1] = 3;
+		    typeahead[typeaheadlen + 2] = ch2;
+		    n += 2;
 		}
 #ifdef FEAT_MBYTE
 		/* Only convert normal characters, not special keys.  Need to
@@ -1800,12 +1801,31 @@ mch_inchar(
 		if (input_conv.vc_type != CONV_NONE
 						&& (ch2 == NUL || c != K_NUL))
 		{
+		    conv = TRUE;
 		    typeaheadlen -= unconverted;
 		    n = convert_input_safe(typeahead + typeaheadlen,
 				n + unconverted, TYPEAHEADLEN - typeaheadlen,
 				rest == NULL ? &rest : NULL, &restlen);
 		}
 #endif
+
+		if (conv)
+		{
+		    char_u *p = typeahead + typeaheadlen;
+		    char_u *e = typeahead + TYPEAHEADLEN;
+
+		    while (*p && p < e)
+		    {
+			if (*p == K_NUL)
+			{
+			    ++p;
+			    mch_memmove(p + 1, p, ((size_t)(e - p)) - 1);
+			    *p = 3;
+			    ++n;
+			}
+			++p;
+		    }
+		}
 
 		/* Use the ALT key to set the 8th bit of the character
 		 * when it's one byte, the 8th bit isn't set yet and not
@@ -1886,6 +1906,8 @@ executable_exists(char *name, char_u **path)
 {
     char	*dum;
     char	fname[_MAX_PATH];
+    char	*curpath, *newpath;
+    long	n;
 
 #ifdef FEAT_MBYTE
     if (enc_codepage >= 0 && (int)GetACP() != enc_codepage)
@@ -1893,11 +1915,19 @@ executable_exists(char *name, char_u **path)
 	WCHAR	*p = enc_to_utf16(name, NULL);
 	WCHAR	fnamew[_MAX_PATH];
 	WCHAR	*dumw;
-	long	n;
+	WCHAR	*wcurpath, *wnewpath;
 
 	if (p != NULL)
 	{
-	    n = (long)SearchPathW(NULL, p, NULL, _MAX_PATH, fnamew, &dumw);
+	    wcurpath = _wgetenv(L"PATH");
+	    wnewpath = (WCHAR*)alloc((unsigned)(wcslen(wcurpath) + 3)
+							    * sizeof(WCHAR));
+	    if (wnewpath == NULL)
+		return FALSE;
+	    wcscpy(wnewpath, L".;");
+	    wcscat(wnewpath, wcurpath);
+	    n = (long)SearchPathW(wnewpath, p, NULL, _MAX_PATH, fnamew, &dumw);
+	    vim_free(wnewpath);
 	    vim_free(p);
 	    if (n > 0 || GetLastError() != ERROR_CALL_NOT_IMPLEMENTED)
 	    {
@@ -1913,7 +1943,16 @@ executable_exists(char *name, char_u **path)
 	}
     }
 #endif
-    if (SearchPath(NULL, name, NULL, _MAX_PATH, fname, &dum) == 0)
+
+    curpath = getenv("PATH");
+    newpath = (char*)alloc((unsigned)(STRLEN(curpath) + 3));
+    if (newpath == NULL)
+	return FALSE;
+    STRCPY(newpath, ".;");
+    STRCAT(newpath, curpath);
+    n = (long)SearchPath(newpath, name, NULL, _MAX_PATH, fname, &dum);
+    vim_free(newpath);
+    if (n == 0)
 	return FALSE;
     if (mch_isdir(fname))
 	return FALSE;
