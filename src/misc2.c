@@ -2477,6 +2477,7 @@ static struct key_name_entry
     {K_SWIPEUP,		(char_u *)"SwipeUp"},
     {K_SWIPEDOWN,	(char_u *)"SwipeDown"},
 #endif
+    {K_CURSORHOLD,	(char_u *)"CursorHold"},
     {0,			NULL}
 };
 
