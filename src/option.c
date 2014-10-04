@@ -2164,6 +2164,15 @@ static struct vimoption
     {"remap",	    NULL,   P_BOOL|P_VI_DEF,
 			    (char_u *)&p_remap, PV_NONE,
 			    {(char_u *)TRUE, (char_u *)0L} SCRIPTID_INIT},
+    {"renderoptions", "rop", P_STRING|P_COMMA|P_RCLR|P_VI_DEF,
+#ifdef FEAT_RENDER_OPTIONS
+			    (char_u *)&p_rop, PV_NONE,
+			    {(char_u *)"", (char_u *)0L}
+#else
+			    (char_u *)NULL, PV_NONE,
+			    {(char_u *)NULL, (char_u *)0L}
+#endif
+			    SCRIPTID_INIT},
     {"report",	    NULL,   P_NUM|P_VI_DEF,
 			    (char_u *)&p_report, PV_NONE,
 			    {(char_u *)2L, (char_u *)0L} SCRIPTID_INIT},
@@ -3027,7 +3036,7 @@ static char *(p_bg_values[]) = {"light", "dark", NULL};
 static char *(p_nf_values[]) = {"octal", "hex", "alpha", NULL};
 static char *(p_ff_values[]) = {FF_UNIX, FF_DOS, FF_MAC, NULL};
 #ifdef FEAT_CRYPT
-static char *(p_cm_values[]) = {"zip", "blowfish", NULL};
+static char *(p_cm_values[]) = {"zip", "blowfish", "blowfish2", NULL};
 #endif
 #ifdef FEAT_CMDL_COMPL
 static char *(p_wop_values[]) = {"tagfile", NULL};
@@ -3135,6 +3144,11 @@ static void fill_breakat_flags __ARGS((void));
 static int opt_strings_flags __ARGS((char_u *val, char **values, unsigned *flagp, int list));
 static int check_opt_strings __ARGS((char_u *val, char **values, int));
 static int check_opt_wim __ARGS((void));
+
+#ifdef FEAT_LINEBREAK
+static int briopt_check __ARGS((win_T *wp));
+#endif
+
 #ifdef FEAT_FULLSCREEN
 static int check_fuoptions __ARGS((char_u *, unsigned *, int *));
 #endif
@@ -3700,6 +3714,9 @@ set_options_default(opt_flags)
 	win_comp_scroll(wp);
 #else
 	win_comp_scroll(curwin);
+#endif
+#ifdef FEAT_CINDENT
+    parse_cino(curbuf);
 #endif
 }
 
@@ -5352,7 +5369,7 @@ didset_options()
     (void)check_cedit();
 #endif
 #ifdef FEAT_LINEBREAK
-    briopt_check();
+    briopt_check(curwin);
 #endif
 }
 
@@ -5811,7 +5828,7 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
     /* 'breakindentopt' */
     else if (varp == &curwin->w_p_briopt)
     {
-	if (briopt_check() == FAIL)
+	if (briopt_check(curwin) == FAIL)
 	    errmsg = e_invarg;
     }
 #endif
@@ -6207,7 +6224,7 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 # endif
 	if (STRCMP(curbuf->b_p_key, oldval) != 0)
 	    /* Need to update the swapfile. */
-	    ml_set_crypt_key(curbuf, oldval, get_crypt_method(curbuf));
+	    ml_set_crypt_key(curbuf, oldval, crypt_get_method_nr(curbuf));
     }
 
     else if (gvarp == &p_cm)
@@ -6218,7 +6235,7 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 	    p = p_cm;
 	if (check_opt_strings(p, p_cm_values, TRUE) != OK)
 	    errmsg = e_invarg;
-	else if (get_crypt_method(curbuf) > 0 && blowfish_self_test() == FAIL)
+	else if (crypt_self_test() == FAIL)
 	    errmsg = e_invarg;
 	else
 	{
@@ -6229,6 +6246,14 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 		    free_string_option(p_cm);
 		p_cm = vim_strsave((char_u *)"zip");
 		new_value_alloced = TRUE;
+	    }
+	    /* When using ":set cm=name" the local value is going to be empty.
+	     * Do that here, otherwise the crypt functions will still use the
+	     * local value. */
+	    if ((opt_flags & (OPT_LOCAL | OPT_GLOBAL)) == 0)
+	    {
+		free_string_option(curbuf->b_p_cm);
+		curbuf->b_p_cm = empty_option;
 	    }
 
 	    /* Need to update the swapfile when the effective method changed.
@@ -6244,7 +6269,7 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 		p = curbuf->b_p_cm;
 	    if (STRCMP(s, p) != 0)
 		ml_set_crypt_key(curbuf, curbuf->b_p_key,
-						 crypt_method_from_string(s));
+						crypt_method_nr_from_name(s));
 
 	    /* If the global value changes need to update the swapfile for all
 	     * buffers using that value. */
@@ -6255,7 +6280,7 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 		for (buf = firstbuf; buf != NULL; buf = buf->b_next)
 		    if (buf != curbuf && *buf->b_p_cm == NUL)
 			ml_set_crypt_key(buf, buf->b_p_key,
-					    crypt_method_from_string(oldval));
+					   crypt_method_nr_from_name(oldval));
 	    }
 	}
     }
@@ -7083,6 +7108,14 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
     {
 	/* TODO: recognize errors */
 	parse_cino(curbuf);
+    }
+#endif
+
+#if defined(FEAT_RENDER_OPTIONS)
+    else if (varp == &p_rop && gui.in_use)
+    {
+	if (!gui_mch_set_rendering_options(p_rop))
+	    errmsg = e_invarg;
     }
 #endif
 
@@ -10348,6 +10381,9 @@ win_copy_options(wp_from, wp_to)
     wp_to->w_farsi = wp_from->w_farsi;
 #  endif
 # endif
+#if defined(FEAT_LINEBREAK)
+    briopt_check(wp_to);
+#endif
 }
 #endif
 
@@ -12213,15 +12249,16 @@ check_fuoptions(p_fuoptions, flags, bgcolor)
  * This is called when 'breakindentopt' is changed and when a window is
  * initialized.
  */
-    int
-briopt_check()
+    static int
+briopt_check(wp)
+    win_T *wp;
 {
     char_u	*p;
     int		bri_shift = 0;
     long	bri_min = 20;
     int		bri_sbr = FALSE;
 
-    p = curwin->w_p_briopt;
+    p = wp->w_p_briopt;
     while (*p != NUL)
     {
 	if (STRNCMP(p, "shift:", 6) == 0
@@ -12246,9 +12283,9 @@ briopt_check()
 	    ++p;
     }
 
-    curwin->w_p_brishift = bri_shift;
-    curwin->w_p_brimin   = bri_min;
-    curwin->w_p_brisbr   = bri_sbr;
+    wp->w_p_brishift = bri_shift;
+    wp->w_p_brimin   = bri_min;
+    wp->w_p_brisbr   = bri_sbr;
 
     return OK;
 }

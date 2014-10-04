@@ -759,11 +759,14 @@ getcmdline(firstc, count, indent)
 #ifdef FEAT_CMDWIN
 	if (c == cedit_key || c == K_CMDWIN)
 	{
-	    /*
-	     * Open a window to edit the command line (and history).
-	     */
-	    c = ex_window();
-	    some_key_typed = TRUE;
+	    if (ex_normal_busy == 0 && got_int == FALSE)
+	    {
+		/*
+		 * Open a window to edit the command line (and history).
+		 */
+		c = ex_window();
+		some_key_typed = TRUE;
+	    }
 	}
 # ifdef FEAT_DIGRAPHS
 	else
@@ -6377,6 +6380,9 @@ ex_window()
 #ifdef FEAT_RIGHTLEFT
     int			save_cmdmsg_rl = cmdmsg_rl;
 #endif
+#ifdef FEAT_FOLDING
+    int			save_KeyTyped;
+#endif
 
     /* Can't do this recursively.  Can't do it when typing a password. */
     if (cmdwin_type != 0
@@ -6511,8 +6517,19 @@ ex_window()
     RedrawingDisabled = i;
 
 # ifdef FEAT_AUTOCMD
+
+#  ifdef FEAT_FOLDING
+    save_KeyTyped = KeyTyped;
+#  endif
+
     /* Trigger CmdwinLeave autocommands. */
     apply_autocmds(EVENT_CMDWINLEAVE, typestr, typestr, FALSE, curbuf);
+
+#  ifdef FEAT_FOLDING
+    /* Restore KeyTyped in case it is modified by autocommands */
+    KeyTyped = save_KeyTyped;
+#  endif
+
 # endif
 
     /* Restore the command line info. */

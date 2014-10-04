@@ -135,6 +135,13 @@
 # endif
 #endif
 
+/* Check support for rendering options */
+#ifdef FEAT_GUI
+# if defined(FEAT_DIRECTX)
+#  define FEAT_RENDER_OPTIONS
+# endif
+#endif
+
 /* Visual Studio 2005 has 'deprecated' many of the standard CRT functions */
 #if _MSC_VER >= 1400
 # define _CRT_SECURE_NO_DEPRECATE
@@ -831,6 +838,7 @@ extern char *(*dyn_libintl_textdomain)(const char *domainname);
 #define EW_ICASE	0x100	/* ignore case */
 #define EW_NOERROR	0x200	/* no error for bad regexp */
 #define EW_NOTWILD	0x400	/* add match with literal name if exists */
+#define EW_KEEPDOLLAR	0x800	/* do not escape $, $var is expanded */
 /* Note: mostly EW_NOTFOUND and EW_SILENT are mutually exclusive: EW_NOTFOUND
  * is used when executing commands and EW_SILENT for interactive expanding. */
 
@@ -1322,6 +1330,7 @@ enum auto_event
     EVENT_SHELLFILTERPOST,	/* after ":1,2!cmd", ":w !cmd", ":r !cmd". */
     EVENT_TEXTCHANGED,		/* text was modified */
     EVENT_TEXTCHANGEDI,		/* text was modified in Insert mode*/
+    EVENT_CMDUNDEFINED,		/* command undefined */
     NUM_EVENTS			/* MUST be the last one */
 };
 
