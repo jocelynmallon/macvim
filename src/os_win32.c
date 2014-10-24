@@ -2775,9 +2775,10 @@ fname_case(
 	if (p != NULL)
 	{
 	    char_u	*q;
-	    WCHAR	buf[_MAX_PATH + 2];
+	    WCHAR	buf[_MAX_PATH + 1];
 
-	    wcscpy(buf, p);
+	    wcsncpy(buf, p, _MAX_PATH);
+	    buf[_MAX_PATH] = L'\0';
 	    vim_free(p);
 
 	    if (fname_casew(buf, (len > 0) ? _MAX_PATH : 0) == OK)
@@ -4647,6 +4648,35 @@ mch_call_shell(
 #ifdef FEAT_TITLE
     char szShellTitle[512];
 
+# ifdef FEAT_MBYTE
+    /* Change the title to reflect that we are in a subshell. */
+    if (enc_codepage >= 0 && (int)GetACP() != enc_codepage)
+    {
+	WCHAR szShellTitle[512];
+
+	if (GetConsoleTitleW(szShellTitle,
+				  sizeof(szShellTitle)/sizeof(WCHAR) - 4) > 0)
+	{
+	    if (cmd == NULL)
+		wcscat(szShellTitle, L" :sh");
+	    else
+	    {
+		WCHAR *wn = enc_to_utf16(cmd, NULL);
+
+		if (wn != NULL)
+		{
+		    wcscat(szShellTitle, L" - !");
+		    if ((wcslen(szShellTitle) + wcslen(wn) <
+					  sizeof(szShellTitle)/sizeof(WCHAR)))
+			wcscat(szShellTitle, wn);
+		    SetConsoleTitleW(szShellTitle);
+		    vim_free(wn);
+		    goto didset;
+		}
+	    }
+	}
+    }
+#endif
     /* Change the title to reflect that we are in a subshell. */
     if (GetConsoleTitle(szShellTitle, sizeof(szShellTitle) - 4) > 0)
     {
@@ -4658,7 +4688,7 @@ mch_call_shell(
 	    if ((strlen(szShellTitle) + strlen(cmd) < sizeof(szShellTitle)))
 		strcat(szShellTitle, cmd);
 	}
-	mch_settitle(szShellTitle, NULL);
+	SetConsoleTitle(szShellTitle);
     }
 #endif
 
