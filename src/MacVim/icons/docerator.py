@@ -10,8 +10,9 @@ from optparse import OptionParser
 
 
 # Resources
-DEFAULT_BACKGROUND = '/System/Library/CoreServices/CoreTypes.bundle/' + \
-    'Contents/Resources/GenericDocumentIcon.icns'  # might require leopard?
+DEFAULT_BACKGROUND = 'GenericDocumentIcon.icns'
+#DEFAULT_BACKGROUND = '/System/Library/CoreServices/CoreTypes.bundle/' + \
+#    'Contents/Resources/GenericDocumentIcon.icns'  # might require leopard?
 
 
 # Cache both images and background renderers globally

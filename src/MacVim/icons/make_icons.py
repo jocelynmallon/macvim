@@ -32,7 +32,7 @@ SMALL = 1  # 128, 32, 16; about 36kB
 LINK = 2  # Create link to generic icon; 4kB (== smallest block size on HFS+)
 
 iconsizes = {
-    SMALL: [128, 32, 16],
+    SMALL: [512, 128, 32, 16],
     LARGE: [512, 128, 32, 16],
 }
 
@@ -40,8 +40,9 @@ iconsizes = {
 # Resources
 MAKEICNS = 'makeicns/makeicns'
 APPICON = 'vim-noshadow-512.png'
-DEFAULT_BACKGROUND = '/System/Library/CoreServices/CoreTypes.bundle/' + \
-    'Contents/Resources/GenericDocumentIcon.icns'
+DEFAULT_BACKGROUND = 'GenericDocumentIcon.icns'
+# DEFAULT_BACKGROUND = '/System/Library/CoreServices/CoreTypes.bundle/' + \
+#    'Contents/Resources/GenericDocumentIcon.icns'
 
 
 # List of icons to create
@@ -68,44 +69,44 @@ vimIcons = {
     'MacVim-bash': [u'SH', SMALL],
     'MacVim-patch': [u'DIFF', SMALL],
     'MacVim-applescript': [u'\uf8ffSCPT,\uf8ffS', SMALL],  # apple sign
-    'MacVim-as': [u'FLASH', LINK],
-    'MacVim-asp': [u'ASP', LINK],
-    'MacVim-bib': [u'BIB', LINK],
-    'MacVim-cs': [u'C#', LINK],
-    'MacVim-csfg': [u'CFDG', LINK],
-    'MacVim-csv': [u'CSV', LINK],
-    'MacVim-tsv': [u'TSV', LINK],
-    'MacVim-cgi': [u'CGI', LINK],
-    'MacVim-cfg': [u'CFG', LINK],
+    'MacVim-as': [u'FLASH', SMALL],
+    'MacVim-asp': [u'ASP', SMALL],
+    'MacVim-bib': [u'BIB', SMALL],
+    'MacVim-cs': [u'C#', SMALL],
+    'MacVim-csfg': [u'CFDG', SMALL],
+    'MacVim-csv': [u'CSV', SMALL],
+    'MacVim-tsv': [u'TSV', SMALL],
+    'MacVim-cgi': [u'CGI', SMALL],
+    'MacVim-cfg': [u'CFG', SMALL],
     'MacVim-css': [u'CSS', SMALL],
-    'MacVim-dtd': [u'DTD', LINK],
-    'MacVim-dylan': [u'DYLAN', LINK],
+    'MacVim-dtd': [u'DTD', SMALL],
+    'MacVim-dylan': [u'DYLAN', SMALL],
     'MacVim-erl': [u'ERLANG,ERL', SMALL],
     'MacVim-fscript': [u'FSCPT,FSCR,FS', SMALL],
     'MacVim-hs': [u'HS', SMALL],
-    'MacVim-inc': [u'INC', LINK],
+    'MacVim-inc': [u'INC', SMALL],
     'MacVim-ics': [u'ICS', SMALL],
-    'MacVim-ini': [u'INI', LINK],
-    'MacVim-io': [u'IO', LINK],
-    'MacVim-bsh': [u'BSH', LINK],
-    'MacVim-properties': [u'PROP', LINK],
+    'MacVim-ini': [u'INI', SMALL],
+    'MacVim-io': [u'IO', SMALL],
+    'MacVim-bsh': [u'BSH', SMALL],
+    'MacVim-properties': [u'PROP', SMALL],
     'MacVim-jsp': [u'JSP', SMALL],
     'MacVim-lisp': [u'LISP,LISP,LSP', SMALL],
     'MacVim-log': [u'LOG', SMALL],
     'MacVim-wiki': [u'WIKI', SMALL],
-    'MacVim-ps': [u'PS', LINK],
-    #'MacVim-plist': [u'PLIST', SMALL],
+    'MacVim-ps': [u'PS', SMALL],
+    'MacVim-plist': [u'PLIST', SMALL],
     'MacVim-sch': [u'SCHEME,SCM', SMALL],
     'MacVim-sql': [u'SQL', SMALL],
     'MacVim-tcl': [u'TCL', SMALL],
-    'MacVim-xsl': [u'XSL', LINK],
+    'MacVim-xsl': [u'XSL', SMALL],
     'MacVim-vcf': [u'VCARD,VCF', SMALL],
-    'MacVim-vb': [u'VBASIC,VB', LINK],
+    'MacVim-vb': [u'VBASIC,VB', SMALL],
     'MacVim-yaml': [u'YAML,YAML,YML', SMALL],
-    'MacVim-gtd': [u'GTD', LINK],
-    'MacVim-markdown': [u'MARK\u2193,M\u2193', LINK],  # down arrow
-    'MacVim-rst': [u'RST', LINK],
-    'MacVim-vba': [u'VBA', LINK],
+    'MacVim-gtd': [u'GTD', SMALL],
+    'MacVim-markdown': [u'MARK\u2193,M\u2193', SMALL],  # down arrow
+    'MacVim-rst': [u'RST', SMALL],
+    'MacVim-vba': [u'VBA', SMALL],
 }
 
 
