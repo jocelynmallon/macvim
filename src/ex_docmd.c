@@ -49,10 +49,15 @@ static void ex_delcommand __ARGS((exarg_T *eap));
 static char_u *get_user_command_name __ARGS((int idx));
 # endif
 
+/* Wether a command index indicates a user command. */
+# define IS_USER_CMDIDX(idx) ((int)(idx) < 0)
+
 #else
 # define ex_command	ex_ni
 # define ex_comclear	ex_ni
 # define ex_delcommand	ex_ni
+/* Wether a command index indicates a user command. */
+# define IS_USER_CMDIDX(idx) (FALSE)
 #endif
 
 #ifdef FEAT_EVAL
@@ -2150,6 +2155,26 @@ do_one_cmd(cmdlinep, sourcing,
     /* Find the command and let "p" point to after it. */
     p = find_command(&ea, NULL);
 
+#ifdef FEAT_AUTOCMD
+    /* If this looks like an undefined user command and there are CmdUndefined
+     * autocommands defined, trigger the matching autocommands. */
+    if (p != NULL && ea.cmdidx == CMD_SIZE && !ea.skip
+	    && ASCII_ISUPPER(*ea.cmd)
+	    && has_cmdundefined())
+    {
+	int ret;
+
+	p = ea.cmd;
+	while (ASCII_ISALNUM(*p))
+	    ++p;
+	p = vim_strnsave(ea.cmd, (int)(p - ea.cmd));
+	ret = apply_autocmds(EVENT_CMDUNDEFINED, p, p, TRUE, NULL);
+	vim_free(p);
+	if (ret && !aborting())
+	    p = find_command(&ea, NULL);
+    }
+#endif
+
 #ifdef FEAT_USR_CMDS
     if (p == NULL)
     {
@@ -2177,11 +2202,8 @@ do_one_cmd(cmdlinep, sourcing,
 	goto doend;
     }
 
-    ni = (
-#ifdef FEAT_USR_CMDS
-	    !USER_CMDIDX(ea.cmdidx) &&
-#endif
-	    (cmdnames[ea.cmdidx].cmd_func == ex_ni
+    ni = (!IS_USER_CMDIDX(ea.cmdidx)
+	    && (cmdnames[ea.cmdidx].cmd_func == ex_ni
 #ifdef HAVE_EX_SCRIPT_NI
 	     || cmdnames[ea.cmdidx].cmd_func == ex_script_ni
 #endif
@@ -2216,9 +2238,7 @@ do_one_cmd(cmdlinep, sourcing,
 /*
  * 5. parse arguments
  */
-#ifdef FEAT_USR_CMDS
-    if (!USER_CMDIDX(ea.cmdidx))
-#endif
+    if (!IS_USER_CMDIDX(ea.cmdidx))
 	ea.argt = (long)cmdnames[(int)ea.cmdidx].cmd_argt;
 
     if (!ea.skip)
@@ -2239,10 +2259,7 @@ do_one_cmd(cmdlinep, sourcing,
 	}
 
 	if (text_locked() && !(ea.argt & CMDWIN)
-# ifdef FEAT_USR_CMDS
-		&& !USER_CMDIDX(ea.cmdidx)
-# endif
-	   )
+		&& !IS_USER_CMDIDX(ea.cmdidx))
 	{
 	    /* Command not allowed when editing the command line. */
 #ifdef FEAT_CMDWIN
@@ -2260,9 +2277,7 @@ do_one_cmd(cmdlinep, sourcing,
 	if (!(ea.argt & CMDWIN)
 		&& ea.cmdidx != CMD_edit
 		&& ea.cmdidx != CMD_checktime
-# ifdef FEAT_USR_CMDS
-		&& !USER_CMDIDX(ea.cmdidx)
-# endif
+		&& !IS_USER_CMDIDX(ea.cmdidx)
 		&& curbuf_locked())
 	    goto doend;
 #endif
@@ -2455,10 +2470,8 @@ do_one_cmd(cmdlinep, sourcing,
     /* accept numbered register only when no count allowed (:put) */
     if (       (ea.argt & REGSTR)
 	    && *ea.arg != NUL
-#ifdef FEAT_USR_CMDS
-	    /* Do not allow register = for user commands */
-	    && (!USER_CMDIDX(ea.cmdidx) || *ea.arg != '=')
-#endif
+	       /* Do not allow register = for user commands */
+	    && (!IS_USER_CMDIDX(ea.cmdidx) || *ea.arg != '=')
 	    && !((ea.argt & COUNT) && VIM_ISDIGIT(*ea.arg)))
     {
 #ifndef FEAT_CLIPBOARD
@@ -2469,14 +2482,8 @@ do_one_cmd(cmdlinep, sourcing,
 	    goto doend;
 	}
 #endif
-	if (
-#ifdef FEAT_USR_CMDS
-	    valid_yank_reg(*ea.arg, (ea.cmdidx != CMD_put
-						   && USER_CMDIDX(ea.cmdidx)))
-#else
-	    valid_yank_reg(*ea.arg, ea.cmdidx != CMD_put)
-#endif
-	   )
+	if (valid_yank_reg(*ea.arg, (ea.cmdidx != CMD_put
+					      && !IS_USER_CMDIDX(ea.cmdidx))))
 	{
 	    ea.regname = *ea.arg++;
 #ifdef FEAT_EVAL
@@ -2650,10 +2657,7 @@ do_one_cmd(cmdlinep, sourcing,
      * number.  Don't do this for a user command.
      */
     if ((ea.argt & BUFNAME) && *ea.arg != NUL && ea.addr_count == 0
-# ifdef FEAT_USR_CMDS
-	    && !USER_CMDIDX(ea.cmdidx)
-# endif
-	    )
+	    && !IS_USER_CMDIDX(ea.cmdidx))
     {
 	/*
 	 * :bdelete, :bwipeout and :bunload take several arguments, separated
@@ -2691,7 +2695,7 @@ do_one_cmd(cmdlinep, sourcing,
 #endif
 
 #ifdef FEAT_USR_CMDS
-    if (USER_CMDIDX(ea.cmdidx))
+    if (IS_USER_CMDIDX(ea.cmdidx))
     {
 	/*
 	 * Execute a user-defined command.
@@ -2750,11 +2754,8 @@ doend:
     }
 #ifdef FEAT_EVAL
     do_errthrow(cstack,
-	    (ea.cmdidx != CMD_SIZE
-# ifdef FEAT_USR_CMDS
-	     && !USER_CMDIDX(ea.cmdidx)
-# endif
-	    ) ? cmdnames[(int)ea.cmdidx].cmd_name : (char_u *)NULL);
+	    (ea.cmdidx != CMD_SIZE && !IS_USER_CMDIDX(ea.cmdidx))
+			? cmdnames[(int)ea.cmdidx].cmd_name : (char_u *)NULL);
 #endif
 
     if (verbose_save >= 0)
@@ -3348,9 +3349,7 @@ set_one_cmd_context(xp, buff)
 /*
  * 5. parse arguments
  */
-#ifdef FEAT_USR_CMDS
-    if (!USER_CMDIDX(ea.cmdidx))
-#endif
+    if (!IS_USER_CMDIDX(ea.cmdidx))
 	ea.argt = (long)cmdnames[(int)ea.cmdidx].cmd_argt;
 
     arg = skipwhite(p);
@@ -5132,6 +5131,8 @@ ex_buffer(eap)
 	    goto_buffer(eap, DOBUF_CURRENT, FORWARD, 0);
 	else
 	    goto_buffer(eap, DOBUF_FIRST, FORWARD, (int)eap->line2);
+	if (eap->do_ecmd_cmd != NULL)
+	    do_cmdline_cmd(eap->do_ecmd_cmd);
     }
 }
 
@@ -5144,6 +5145,8 @@ ex_bmodified(eap)
     exarg_T	*eap;
 {
     goto_buffer(eap, DOBUF_MOD, FORWARD, (int)eap->line2);
+    if (eap->do_ecmd_cmd != NULL)
+	do_cmdline_cmd(eap->do_ecmd_cmd);
 }
 
 /*
@@ -5155,6 +5158,8 @@ ex_bnext(eap)
     exarg_T	*eap;
 {
     goto_buffer(eap, DOBUF_CURRENT, FORWARD, (int)eap->line2);
+    if (eap->do_ecmd_cmd != NULL)
+	do_cmdline_cmd(eap->do_ecmd_cmd);
 }
 
 /*
@@ -5168,6 +5173,8 @@ ex_bprevious(eap)
     exarg_T	*eap;
 {
     goto_buffer(eap, DOBUF_CURRENT, BACKWARD, (int)eap->line2);
+    if (eap->do_ecmd_cmd != NULL)
+	do_cmdline_cmd(eap->do_ecmd_cmd);
 }
 
 /*
@@ -5181,6 +5188,8 @@ ex_brewind(eap)
     exarg_T	*eap;
 {
     goto_buffer(eap, DOBUF_FIRST, FORWARD, 0);
+    if (eap->do_ecmd_cmd != NULL)
+	do_cmdline_cmd(eap->do_ecmd_cmd);
 }
 
 /*
@@ -5192,6 +5201,8 @@ ex_blast(eap)
     exarg_T	*eap;
 {
     goto_buffer(eap, DOBUF_LAST, BACKWARD, 0);
+    if (eap->do_ecmd_cmd != NULL)
+	do_cmdline_cmd(eap->do_ecmd_cmd);
 }
 #endif
 
@@ -11533,8 +11544,7 @@ ex_match(eap)
 ex_X(eap)
     exarg_T	*eap UNUSED;
 {
-    if (get_crypt_method(curbuf) == 0 || blowfish_self_test() == OK)
-	(void)get_crypt_key(TRUE, TRUE);
+    (void)crypt_get_key(TRUE, TRUE);
 }
 #endif
 
@@ -11561,6 +11571,10 @@ ex_folddo(eap)
 {
     linenr_T	lnum;
 
+#ifdef FEAT_CLIPBOARD
+    start_global_changes();
+#endif
+
     /* First set the marks for all lines closed/open. */
     for (lnum = eap->line1; lnum <= eap->line2; ++lnum)
 	if (hasFolding(lnum, NULL, NULL) == (eap->cmdidx == CMD_folddoclosed))
@@ -11569,5 +11583,8 @@ ex_folddo(eap)
     /* Execute the command on the marked lines. */
     global_exe(eap->arg);
     ml_clearmarked();	   /* clear rest of the marks */
+#ifdef FEAT_CLIPBOARD
+    end_global_changes();
+#endif
 }
 #endif

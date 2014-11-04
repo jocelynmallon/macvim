@@ -4011,11 +4011,19 @@ ex_append(eap)
 	    eap->nextcmd = p;
 	}
 	else
+	{
+	    int save_State = State;
+
+	    /* Set State to avoid the cursor shape to be set to INSERT mode
+	     * when getline() returns. */
+	    State = CMDLINE;
 	    theline = eap->getline(
 #ifdef FEAT_EVAL
 		    eap->cstack->cs_looplevel > 0 ? -1 :
 #endif
 		    NUL, eap->cookie, indent);
+	    State = save_State;
+	}
 	lines_left = Rows - 1;
 	if (theline == NULL)
 	    break;
@@ -5514,7 +5522,15 @@ ex_global(eap)
 	    smsg((char_u *)_("Pattern not found: %s"), pat);
     }
     else
+    {
+#ifdef FEAT_CLIPBOARD
+	start_global_changes();
+#endif
 	global_exe(cmd);
+#ifdef FEAT_CLIPBOARD
+	end_global_changes();
+#endif
+    }
 
     ml_clearmarked();	   /* clear rest of the marks */
     vim_regfree(regmatch.regprog);
@@ -5883,6 +5899,26 @@ erret:
     vim_free(tag);
 }
 
+/*
+ * ":helpclose": Close one help window
+ */
+    void
+ex_helpclose(eap)
+    exarg_T	*eap UNUSED;
+{
+#if defined(FEAT_WINDOWS)
+    win_T *win;
+
+    FOR_ALL_WINDOWS(win)
+    {
+	if (win->w_buffer->b_help)
+	{
+	    win_close(win, FALSE);
+	    return;
+	}
+    }
+#endif
+}
 
 #if defined(FEAT_MULTI_LANG) || defined(PROTO)
 /*

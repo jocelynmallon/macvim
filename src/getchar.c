@@ -678,6 +678,17 @@ stuffReadbuff(s)
     add_buff(&readbuf1, s, -1L);
 }
 
+/*
+ * Append string "s" to the redo stuff buffer.
+ * CSI and K_SPECIAL must already have been escaped.
+ */
+    void
+stuffRedoReadbuff(s)
+    char_u	*s;
+{
+    add_buff(&readbuf2, s, -1L);
+}
+
     void
 stuffReadbuffLen(s, len)
     char_u	*s;
@@ -3696,6 +3707,9 @@ do_map(maptype, arg, mode, abbrev)
     {
 	if (!did_it)
 	    retval = 2;			    /* no match */
+	else if (*keys == Ctrl_C)
+	    /* If CTRL-C has been unmapped, reuse it for Interrupting. */
+	    mapped_ctrl_c = FALSE;
 	goto theend;
     }
 
@@ -3728,7 +3742,7 @@ do_map(maptype, arg, mode, abbrev)
 	goto theend;
     }
 
-    /* If CTRL-C has been mapped, don't always use it for Interrupting */
+    /* If CTRL-C has been mapped, don't always use it for Interrupting. */
     if (*keys == Ctrl_C)
 	mapped_ctrl_c = TRUE;
 
@@ -4512,10 +4526,28 @@ check_abbr(c, ptr, col, mincol)
 #endif
 		(mp = mp->m_next))
 	{
+	    int		qlen = mp->m_keylen;
+	    char_u	*q = mp->m_keys;
+	    int		match;
+
+	    if (vim_strbyte(mp->m_keys, K_SPECIAL) != NULL)
+	    {
+		/* might have CSI escaped mp->m_keys */
+		q = vim_strsave(mp->m_keys);
+		if (q != NULL)
+		{
+		    vim_unescape_csi(q);
+		    qlen = (int)STRLEN(q);
+		}
+	    }
+
 	    /* find entries with right mode and keys */
-	    if (       (mp->m_mode & State)
-		    && mp->m_keylen == len
-		    && !STRNCMP(mp->m_keys, ptr, (size_t)len))
+	    match =    (mp->m_mode & State)
+		    && qlen == len
+		    && !STRNCMP(q, ptr, (size_t)len);
+	    if (q != mp->m_keys)
+		vim_free(q);
+	    if (match)
 		break;
 	}
 	if (mp != NULL)

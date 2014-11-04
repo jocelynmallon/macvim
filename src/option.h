@@ -104,11 +104,12 @@
 #define FO_ONE_LETTER	'1'
 #define FO_WHITE_PAR	'w'	/* trailing white space continues paragr. */
 #define FO_AUTO		'a'	/* automatic formatting */
+#define FO_RIGOROUS_TW  ']'     /* respect textwidth rigorously */
 #define FO_REMOVE_COMS	'j'	/* remove comment leaders when joining lines */
 
 #define DFLT_FO_VI	"vt"
 #define DFLT_FO_VIM	"tcq"
-#define FO_ALL		"tcroq2vlb1mMBn,awj"	/* for do_set() */
+#define FO_ALL		"tcroq2vlb1mMBn,aw]j"	/* for do_set() */
 
 /* characters for the p_cpo option: */
 #define CPO_ALTREAD	'a'	/* ":read" sets alternate file name */
@@ -327,7 +328,7 @@ EXTERN char_u	*p_bs;		/* 'backspace' */
 EXTERN char_u	*p_bg;		/* 'background' */
 EXTERN int	p_bk;		/* 'backup' */
 EXTERN char_u	*p_bkc;		/* 'backupcopy' */
-EXTERN unsigned	bkc_flags;
+EXTERN unsigned	bkc_flags;	/* flags from 'backupcopy' */
 #ifdef IN_OPTION_C
 static char *(p_bkc_values[]) = {"yes", "auto", "no", "breaksymlink", "breakhardlink", NULL};
 #endif
@@ -667,6 +668,9 @@ EXTERN long	p_rdt;		/* 'redrawtime' */
 #endif
 EXTERN int	p_remap;	/* 'remap' */
 EXTERN long	p_re;		/* 'regexpengine' */
+#ifdef FEAT_RENDER_OPTIONS
+EXTERN char_u	*p_rop;		/* 'renderoptions' */
+#endif
 EXTERN long	p_report;	/* 'report' */
 #if defined(FEAT_WINDOWS) && defined(FEAT_QUICKFIX)
 EXTERN long	p_pvh;		/* 'previewheight' */
@@ -930,6 +934,9 @@ enum
     , BV_AR
 #ifdef FEAT_QUICKFIX
     , BV_BH
+#endif
+    , BV_BKC
+#ifdef FEAT_QUICKFIX
     , BV_BT
     , BV_EFM
     , BV_GP
