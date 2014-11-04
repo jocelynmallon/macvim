@@ -44,8 +44,10 @@ SCRIPTS = test1.out test3.out test4.out test5.out test6.out \
 		test_insertcount.out \
 		test_listlbr.out \
 		test_listlbr_utf8.out \
+		test_mapping.out \
 		test_options.out \
 		test_qf_title.out \
+		test_signs.out \
 		test_utf8.out
 
 .SUFFIXES: .in .out
