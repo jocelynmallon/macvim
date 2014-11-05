@@ -201,8 +201,8 @@ def main():
           textrenderer=SmallTextRenderer, backgroundrenderer=NoIconRenderer)
 
   # ...create links later (to make sure the link targets exist)
-  createLinks([name for (name, t) in vimIcons.items() if t[1] == LINK],
-      '%s.icns' % GENERIC_ICON_NAME)
+#  createLinks([name for (name, t) in vimIcons.items() if t[1] == LINK],
+#      '%s.icns' % GENERIC_ICON_NAME)
 
 
 if __name__ == '__main__':
