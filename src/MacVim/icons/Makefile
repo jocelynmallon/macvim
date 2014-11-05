@@ -20,7 +20,7 @@ $(OUTDIR)/MacVim-generic.icns:
 
 all: make_icons.py vim-noshadow-512.png loadfont.so
 	rm -f MacVim-*.icns
-	$(MAKE) -C makeicns
+#	$(MAKE) -C makeicns
 	/usr/bin/python make_icons.py "$(OUTDIR)"
 
 loadfont.so: loadfont.c
