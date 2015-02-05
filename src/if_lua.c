@@ -1530,7 +1530,8 @@ luaV_setref (lua_State *L)
     luaV_getfield(L, LUAVIM_LIST);
     luaV_getfield(L, LUAVIM_DICT);
     lua_pushnil(L);
-    while (!abort && lua_next(L, lua_upvalueindex(1)) != 0) /* traverse cache table */
+    /* traverse cache table */
+    while (!abort && lua_next(L, lua_upvalueindex(1)) != 0)
     {
 	lua_getmetatable(L, -1);
 	if (lua_rawequal(L, -1, 2)) /* list? */
@@ -1547,6 +1548,7 @@ luaV_setref (lua_State *L)
 	abort = set_ref_in_item(&tv, copyID, NULL, NULL);
     }
     lua_pushinteger(L, abort);
+    return 1;
 }
 
     static int
