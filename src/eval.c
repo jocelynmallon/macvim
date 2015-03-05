@@ -93,7 +93,6 @@ typedef struct lval_S
     char_u	*ll_newkey;	/* New key for Dict in alloc. mem or NULL. */
 } lval_T;
 
-
 static char *e_letunexp	= N_("E18: Unexpected characters in :let");
 static char *e_listidx = N_("E684: list index out of range: %ld");
 static char *e_undefvar = N_("E121: Undefined variable: %s");
@@ -2951,7 +2950,7 @@ set_var_lval(lp, endp, rettv, copy, op)
 	/*
 	 * Check whether any of the list items is locked
 	 */
-	for (ri = rettv->vval.v_list->lv_first; ri != NULL; )
+	for (ri = rettv->vval.v_list->lv_first; ri != NULL && ll_li != NULL; )
 	{
 	    if (tv_check_lock(ll_li->li_tv.v_lock, lp->ll_name))
 		return;
@@ -5975,7 +5974,7 @@ list_unref(l)
 }
 
 /*
- * Free a list, including all items it points to.
+ * Free a list, including all non-container items it points to.
  * Ignores the reference count.
  */
     void
@@ -6007,6 +6006,7 @@ list_free(l, recurse)
 
 /*
  * Allocate a list item.
+ * It is not initialized, don't forget to set v_lock.
  */
     listitem_T *
 listitem_alloc()
@@ -6811,11 +6811,12 @@ list_join(gap, l, sep, echo_style, copyID)
 garbage_collect()
 {
     int		copyID;
+    int		abort = FALSE;
     buf_T	*buf;
     win_T	*wp;
     int		i;
     funccall_T	*fc, **pfc;
-    int		did_free;
+    int		did_free = FALSE;
     int		did_free_funccal = FALSE;
 #ifdef FEAT_WINDOWS
     tabpage_T	*tp;
@@ -6841,82 +6842,95 @@ garbage_collect()
      * the item is referenced elsewhere the funccal must not be freed. */
     for (fc = previous_funccal; fc != NULL; fc = fc->caller)
     {
-	set_ref_in_ht(&fc->l_vars.dv_hashtab, copyID + 1);
-	set_ref_in_ht(&fc->l_avars.dv_hashtab, copyID + 1);
+	abort = abort || set_ref_in_ht(&fc->l_vars.dv_hashtab, copyID + 1,
+									NULL);
+	abort = abort || set_ref_in_ht(&fc->l_avars.dv_hashtab, copyID + 1,
+									NULL);
     }
 
     /* script-local variables */
     for (i = 1; i <= ga_scripts.ga_len; ++i)
-	set_ref_in_ht(&SCRIPT_VARS(i), copyID);
+	abort = abort || set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
 
     /* buffer-local variables */
     for (buf = firstbuf; buf != NULL; buf = buf->b_next)
-	set_ref_in_item(&buf->b_bufvar.di_tv, copyID);
+	abort = abort || set_ref_in_item(&buf->b_bufvar.di_tv, copyID,
+								  NULL, NULL);
 
     /* window-local variables */
     FOR_ALL_TAB_WINDOWS(tp, wp)
-	set_ref_in_item(&wp->w_winvar.di_tv, copyID);
+	abort = abort || set_ref_in_item(&wp->w_winvar.di_tv, copyID,
+								  NULL, NULL);
 #ifdef FEAT_AUTOCMD
     if (aucmd_win != NULL)
-	set_ref_in_item(&aucmd_win->w_winvar.di_tv, copyID);
+	abort = abort || set_ref_in_item(&aucmd_win->w_winvar.di_tv, copyID,
+								  NULL, NULL);
 #endif
 
 #ifdef FEAT_WINDOWS
     /* tabpage-local variables */
     for (tp = first_tabpage; tp != NULL; tp = tp->tp_next)
-	set_ref_in_item(&tp->tp_winvar.di_tv, copyID);
+	abort = abort || set_ref_in_item(&tp->tp_winvar.di_tv, copyID,
+								  NULL, NULL);
 #endif
 
     /* global variables */
-    set_ref_in_ht(&globvarht, copyID);
+    abort = abort || set_ref_in_ht(&globvarht, copyID, NULL);
 
     /* function-local variables */
     for (fc = current_funccal; fc != NULL; fc = fc->caller)
     {
-	set_ref_in_ht(&fc->l_vars.dv_hashtab, copyID);
-	set_ref_in_ht(&fc->l_avars.dv_hashtab, copyID);
+	abort = abort || set_ref_in_ht(&fc->l_vars.dv_hashtab, copyID, NULL);
+	abort = abort || set_ref_in_ht(&fc->l_avars.dv_hashtab, copyID, NULL);
     }
 
     /* v: vars */
-    set_ref_in_ht(&vimvarht, copyID);
+    abort = abort || set_ref_in_ht(&vimvarht, copyID, NULL);
 
 #ifdef FEAT_LUA
-    set_ref_in_lua(copyID);
+    abort = abort || set_ref_in_lua(copyID);
 #endif
 
 #ifdef FEAT_PYTHON
-    set_ref_in_python(copyID);
+    abort = abort || set_ref_in_python(copyID);
 #endif
 
 #ifdef FEAT_PYTHON3
-    set_ref_in_python3(copyID);
+    abort = abort || set_ref_in_python3(copyID);
 #endif
 
-    /*
-     * 2. Free lists and dictionaries that are not referenced.
-     */
-    did_free = free_unref_items(copyID);
-
-    /*
-     * 3. Check if any funccal can be freed now.
-     */
-    for (pfc = &previous_funccal; *pfc != NULL; )
+    if (!abort)
     {
-	if (can_free_funccal(*pfc, copyID))
+	/*
+	 * 2. Free lists and dictionaries that are not referenced.
+	 */
+	did_free = free_unref_items(copyID);
+
+	/*
+	 * 3. Check if any funccal can be freed now.
+	 */
+	for (pfc = &previous_funccal; *pfc != NULL; )
 	{
-	    fc = *pfc;
-	    *pfc = fc->caller;
-	    free_funccal(fc, TRUE);
-	    did_free = TRUE;
-	    did_free_funccal = TRUE;
+	    if (can_free_funccal(*pfc, copyID))
+	    {
+		fc = *pfc;
+		*pfc = fc->caller;
+		free_funccal(fc, TRUE);
+		did_free = TRUE;
+		did_free_funccal = TRUE;
+	    }
+	    else
+		pfc = &(*pfc)->caller;
 	}
-	else
-	    pfc = &(*pfc)->caller;
+	if (did_free_funccal)
+	    /* When a funccal was freed some more items might be garbage
+	     * collected, so run again. */
+	    (void)garbage_collect();
     }
-    if (did_free_funccal)
-	/* When a funccal was freed some more items might be garbage
-	 * collected, so run again. */
-	(void)garbage_collect();
+    else if (p_verbose > 0)
+    {
+	verb_msg((char_u *)_("Not enough memory to set references, garbage collection aborted!"));
+    }
 
     return did_free;
 }
@@ -6928,14 +6942,16 @@ garbage_collect()
 free_unref_items(copyID)
     int copyID;
 {
-    dict_T	*dd;
-    list_T	*ll;
+    dict_T	*dd, *dd_next;
+    list_T	*ll, *ll_next;
     int		did_free = FALSE;
 
     /*
      * Go through the list of dicts and free items without the copyID.
      */
     for (dd = first_dict; dd != NULL; )
+    {
+	dd_next = dd->dv_used_next;
 	if ((dd->dv_copyID & COPYID_MASK) != (copyID & COPYID_MASK))
 	{
 	    /* Free the Dictionary and ordinary items it contains, but don't
@@ -6943,12 +6959,9 @@ free_unref_items(copyID)
 	     * of dicts or list of lists. */
 	    dict_free(dd, FALSE);
 	    did_free = TRUE;
-
-	    /* restart, next dict may also have been freed */
-	    dd = first_dict;
 	}
-	else
-	    dd = dd->dv_used_next;
+	dd = dd_next;
+    }
 
     /*
      * Go through the list of lists and free items without the copyID.
@@ -6956,6 +6969,8 @@ free_unref_items(copyID)
      * are not referenced anywhere.
      */
     for (ll = first_list; ll != NULL; )
+    {
+	ll_next = ll->lv_used_next;
 	if ((ll->lv_copyID & COPYID_MASK) != (copyID & COPYID_MASK)
 						      && ll->lv_watch == NULL)
 	{
@@ -6964,60 +6979,120 @@ free_unref_items(copyID)
 	     * or list of lists. */
 	    list_free(ll, FALSE);
 	    did_free = TRUE;
-
-	    /* restart, next list may also have been freed */
-	    ll = first_list;
 	}
-	else
-	    ll = ll->lv_used_next;
-
+	ll = ll_next;
+    }
     return did_free;
 }
 
 /*
  * Mark all lists and dicts referenced through hashtab "ht" with "copyID".
+ * "list_stack" is used to add lists to be marked.  Can be NULL.
+ *
+ * Returns TRUE if setting references failed somehow.
  */
-    void
-set_ref_in_ht(ht, copyID)
-    hashtab_T	*ht;
-    int		copyID;
+    int
+set_ref_in_ht(ht, copyID, list_stack)
+    hashtab_T	    *ht;
+    int		    copyID;
+    list_stack_T    **list_stack;
 {
     int		todo;
+    int		abort = FALSE;
     hashitem_T	*hi;
+    hashtab_T	*cur_ht;
+    ht_stack_T	*ht_stack = NULL;
+    ht_stack_T	*tempitem;
 
-    todo = (int)ht->ht_used;
-    for (hi = ht->ht_array; todo > 0; ++hi)
-	if (!HASHITEM_EMPTY(hi))
+    cur_ht = ht;
+    for (;;)
+    {
+	if (!abort)
 	{
-	    --todo;
-	    set_ref_in_item(&HI2DI(hi)->di_tv, copyID);
+	    /* Mark each item in the hashtab.  If the item contains a hashtab
+	     * it is added to ht_stack, if it contains a list it is added to
+	     * list_stack. */
+	    todo = (int)cur_ht->ht_used;
+	    for (hi = cur_ht->ht_array; todo > 0; ++hi)
+		if (!HASHITEM_EMPTY(hi))
+		{
+		    --todo;
+		    abort = abort || set_ref_in_item(&HI2DI(hi)->di_tv, copyID,
+						       &ht_stack, list_stack);
+		}
 	}
+
+	if (ht_stack == NULL)
+	    break;
+
+	/* take an item from the stack */
+	cur_ht = ht_stack->ht;
+	tempitem = ht_stack;
+	ht_stack = ht_stack->prev;
+	free(tempitem);
+    }
+
+    return abort;
 }
 
 /*
  * Mark all lists and dicts referenced through list "l" with "copyID".
+ * "ht_stack" is used to add hashtabs to be marked.  Can be NULL.
+ *
+ * Returns TRUE if setting references failed somehow.
  */
-    void
-set_ref_in_list(l, copyID)
+    int
+set_ref_in_list(l, copyID, ht_stack)
     list_T	*l;
     int		copyID;
+    ht_stack_T	**ht_stack;
 {
-    listitem_T *li;
+    listitem_T	 *li;
+    int		 abort = FALSE;
+    list_T	 *cur_l;
+    list_stack_T *list_stack = NULL;
+    list_stack_T *tempitem;
 
-    for (li = l->lv_first; li != NULL; li = li->li_next)
-	set_ref_in_item(&li->li_tv, copyID);
+    cur_l = l;
+    for (;;)
+    {
+	if (!abort)
+	    /* Mark each item in the list.  If the item contains a hashtab
+	     * it is added to ht_stack, if it contains a list it is added to
+	     * list_stack. */
+	    for (li = cur_l->lv_first; !abort && li != NULL; li = li->li_next)
+		abort = abort || set_ref_in_item(&li->li_tv, copyID,
+						       ht_stack, &list_stack);
+	if (list_stack == NULL)
+	    break;
+
+	/* take an item from the stack */
+	cur_l = list_stack->list;
+	tempitem = list_stack;
+	list_stack = list_stack->prev;
+	free(tempitem);
+    }
+
+    return abort;
 }
 
 /*
  * Mark all lists and dicts referenced through typval "tv" with "copyID".
+ * "list_stack" is used to add lists to be marked.  Can be NULL.
+ * "ht_stack" is used to add hashtabs to be marked.  Can be NULL.
+ *
+ * Returns TRUE if setting references failed somehow.
  */
-    void
-set_ref_in_item(tv, copyID)
-    typval_T	*tv;
-    int		copyID;
+    int
+set_ref_in_item(tv, copyID, ht_stack, list_stack)
+    typval_T	    *tv;
+    int		    copyID;
+    ht_stack_T	    **ht_stack;
+    list_stack_T    **list_stack;
 {
     dict_T	*dd;
     list_T	*ll;
+    int		abort = FALSE;
 
     switch (tv->v_type)
     {
@@ -7027,7 +7102,23 @@ set_ref_in_item(tv, copyID)
 	    {
 		/* Didn't see this dict yet. */
 		dd->dv_copyID = copyID;
-		set_ref_in_ht(&dd->dv_hashtab, copyID);
+		if (ht_stack == NULL)
+		{
+		    abort = set_ref_in_ht(&dd->dv_hashtab, copyID, list_stack);
+		}
+		else
+		{
+		    ht_stack_T *newitem = (ht_stack_T*)malloc(
+							  sizeof(ht_stack_T));
+		    if (newitem == NULL)
+			abort = TRUE;
+		    else
+		    {
+			newitem->ht = &dd->dv_hashtab;
+			newitem->prev = *ht_stack;
+			*ht_stack = newitem;
+		    }
+		}
 	    }
 	    break;
 
@@ -7037,11 +7128,27 @@ set_ref_in_item(tv, copyID)
 	    {
 		/* Didn't see this list yet. */
 		ll->lv_copyID = copyID;
-		set_ref_in_list(ll, copyID);
+		if (list_stack == NULL)
+		{
+		    abort = set_ref_in_list(ll, copyID, ht_stack);
+		}
+		else
+		{
+		    list_stack_T *newitem = (list_stack_T*)malloc(
+							sizeof(list_stack_T));
+		    if (newitem == NULL)
+			abort = TRUE;
+		    else
+		    {
+			newitem->list = ll;
+			newitem->prev = *list_stack;
+			*list_stack = newitem;
+		    }
+		}
 	    }
 	    break;
     }
-    return;
+    return abort;
 }
 
 /*
@@ -7104,7 +7211,7 @@ dict_unref(d)
 }
 
 /*
- * Free a Dictionary, including all items it contains.
+ * Free a Dictionary, including all non-container items it contains.
  * Ignores the reference count.
  */
     void
@@ -7868,7 +7975,7 @@ get_env_tv(arg, rettv, evaluate)
     if (evaluate)
     {
 	if (len == 0)
-           return FAIL; /* can't be an environment variable */
+	    return FAIL; /* invalid empty name */
 
 	cc = name[len];
 	name[len] = NUL;
@@ -8587,13 +8694,19 @@ call_func(funcname, len, rettv, argcount, argvars, firstline, lastline,
 		    error = ERROR_DICT;
 		else
 		{
+		    int did_save_redo = FALSE;
+
 		    /*
 		     * Call the user function.
 		     * Save and restore search patterns, script variables and
 		     * redo buffer.
 		     */
 		    save_search_patterns();
-		    saveRedobuff();
+		    if (!ins_compl_active())
+		    {
+			saveRedobuff();
+			did_save_redo = TRUE;
+		    }
 		    ++fp->uf_calls;
 		    call_user_func(fp, argcount, argvars, rettv,
 					       firstline, lastline,
@@ -8603,7 +8716,8 @@ call_func(funcname, len, rettv, argcount, argvars, firstline, lastline,
 			/* Function was unreferenced while being used, free it
 			 * now. */
 			func_free(fp);
-		    restoreRedobuff();
+		    if (did_save_redo)
+			restoreRedobuff();
 		    restore_search_patterns();
 		    error = ERROR_NONE;
 		}
@@ -10118,14 +10232,18 @@ f_eval(argvars, rettv)
     typval_T	*argvars;
     typval_T	*rettv;
 {
-    char_u	*s;
+    char_u	*s, *p;
 
     s = get_tv_string_chk(&argvars[0]);
     if (s != NULL)
 	s = skipwhite(s);
 
+    p = s;
     if (s == NULL || eval1(&s, rettv, TRUE) == FAIL)
     {
+	if (p != NULL && !aborting())
+	    EMSG2(_(e_invexpr2), p);
+	need_clr_eos = FALSE;
 	rettv->v_type = VAR_NUMBER;
 	rettv->vval.v_number = 0;
     }
@@ -10496,6 +10614,7 @@ f_feedkeys(argvars, rettv)
     typval_T    *rettv UNUSED;
 {
     int		remap = TRUE;
+    int		insert = FALSE;
     char_u	*keys, *flags;
     char_u	nbuf[NUMBUFLEN];
     int		typed = FALSE;
@@ -10520,6 +10639,7 @@ f_feedkeys(argvars, rettv)
 		    case 'n': remap = FALSE; break;
 		    case 'm': remap = TRUE; break;
 		    case 't': typed = TRUE; break;
+		    case 'i': insert = TRUE; break;
 		}
 	    }
 	}
@@ -10530,7 +10650,7 @@ f_feedkeys(argvars, rettv)
 	if (keys_esc != NULL)
 	{
 	    ins_typebuf(keys_esc, (remap ? REMAP_YES : REMAP_NONE),
-					       typebuf.tb_len, !typed, FALSE);
+				  insert ? 0 : typebuf.tb_len, !typed, FALSE);
 	    vim_free(keys_esc);
 	    if (vgetc_busy)
 		typebuf_was_filled = TRUE;
@@ -10721,18 +10841,20 @@ filter_map(argvars, rettv, map)
 	    {
 		if (!HASHITEM_EMPTY(hi))
 		{
+		    int r;
+
 		    --todo;
 		    di = HI2DI(hi);
 		    if (tv_check_lock(di->di_tv.v_lock,
 						     (char_u *)_(arg_errmsg)))
 			break;
 		    vimvars[VV_KEY].vv_str = vim_strsave(di->di_key);
-		    if (filter_map_one(&di->di_tv, expr, map, &rem) == FAIL
-								  || did_emsg)
+		    r = filter_map_one(&di->di_tv, expr, map, &rem);
+		    clear_tv(&vimvars[VV_KEY].vv_tv);
+		    if (r == FAIL || did_emsg)
 			break;
 		    if (!map && rem)
 			dictitem_remove(d, di);
-		    clear_tv(&vimvars[VV_KEY].vv_tv);
 		}
 	    }
 	    hash_unlock(ht);
@@ -10783,6 +10905,7 @@ filter_map_one(tv, expr, map, remp)
     if (*s != NUL)  /* check for trailing chars after expr */
     {
 	EMSG2(_(e_invexpr2), s);
+	clear_tv(&rettv);
 	goto theend;
     }
     if (map)
@@ -11942,7 +12065,8 @@ getpos_both(argvars, rettv, getcurpos)
 #endif
 							      (varnumber_T)0);
 	if (getcurpos)
-	    list_append_number(l, (varnumber_T)curwin->w_curswant + 1);
+	    list_append_number(l, curwin->w_curswant == MAXCOL ?
+		    (varnumber_T)MAXCOL : (varnumber_T)curwin->w_curswant + 1);
     }
     else
 	rettv->vval.v_number = FALSE;
@@ -18733,6 +18857,7 @@ get_cmd_output_as_rettv(argvars, rettv, retlist)
 		goto errret;
 	    }
 	    li->li_tv.v_type = VAR_STRING;
+	    li->li_tv.v_lock = 0;
 	    li->li_tv.vval.v_string = s;
 	    list_append(list, li);
 	}
@@ -22308,14 +22433,11 @@ ex_function(eap)
 		if (*p == '!')
 		    p = skipwhite(p + 1);
 		p += eval_fname_script(p);
-		if (ASCII_ISALPHA(*p))
+		vim_free(trans_function_name(&p, TRUE, 0, NULL));
+		if (*skipwhite(p) == '(')
 		{
-		    vim_free(trans_function_name(&p, TRUE, 0, NULL));
-		    if (*skipwhite(p) == '(')
-		    {
-			++nesting;
-			indent += 2;
-		    }
+		    ++nesting;
+		    indent += 2;
 		}
 	    }
 
@@ -24790,7 +24912,7 @@ repeat:
 	    p = alloc(_MAX_PATH + 1);
 	    if (p != NULL)
 	    {
-		if (GetLongPathName(*fnamep, p, MAXPATHL))
+		if (GetLongPathName(*fnamep, p, _MAX_PATH))
 		{
 		    vim_free(*bufp);
 		    *bufp = *fnamep = p;

@@ -1,4 +1,4 @@
-*term.txt*      For Vim version 7.4.  Last change: 2014 May 13
+*term.txt*      For Vim version 7.4.  Last change: 2015 Feb 23
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -224,10 +224,11 @@ The options are listed below.  The associated termcap code is always equal to
 the last two characters of the option name.  Only one termcap code is
 required: Cursor motion, 't_cm'.
 
-The options 't_da', 't_db', 't_ms', 't_xs' represent flags in the termcap.
-When the termcap flag is present, the option will be set to "y".  But any
-non-empty string means that the flag is set.  An empty string means that the
-flag is not set.  't_CS' works like this too, but it isn't a termcap flag.
+The options 't_da', 't_db', 't_ms', 't_xs', 't_xn' represent flags in the
+termcap.  When the termcap flag is present, the option will be set to "y".
+But any non-empty string means that the flag is set.  An empty string means
+that the flag is not set.  't_CS' works like this too, but it isn't a termcap
+flag.
 
 OUTPUT CODES
 	option	meaning	~
@@ -281,6 +282,9 @@ OUTPUT CODES
 	t_vs	cursor very visible				*t_vs* *'t_vs'*
 								*t_xs* *'t_xs'*
 	t_xs	if non-empty, standout not erased by overwriting (hpterm)
+								*t_xn* *'t_xn'*
+	t_xn	if non-empty, writing a character at the last screen cell
+		does not cause scrolling
 	t_ZH	italics mode					*t_ZH* *'t_ZH'*
 	t_ZR	italics end					*t_ZR* *'t_ZR'*
 
@@ -410,7 +414,7 @@ adjust the various t_ codes.  This avoids the problem that the xterm can
 produce different codes, depending on the mode it is in (8-bit, VT102,
 VT220, etc.).  The result is that codes like <xF1> are no longer needed.
 Note: This is only done on startup.  If the xterm options are changed after
-Vim has started, the escape sequences may not be recognized any more.
+Vim has started, the escape sequences may not be recognized anymore.
 
 							*xterm-resize*
 Window resizing with xterm only works if the allowWindowOps resource is

@@ -1002,17 +1002,8 @@ vim_main2(int argc UNUSED, char **argv UNUSED)
     if (p_im)
 	need_start_insertmode = TRUE;
 
-#ifdef FEAT_CLIPBOARD
-    if (clip_unnamed)
-       /* do not overwrite system clipboard while starting up */
-       clip_did_set_selection = -1;
-#endif
 #ifdef FEAT_AUTOCMD
     apply_autocmds(EVENT_VIMENTER, NULL, NULL, FALSE, curbuf);
-# ifdef FEAT_CLIPBOARD
-    if (clip_did_set_selection < 0)
-       clip_did_set_selection = TRUE;
-# endif
     TIME_MSG("VimEnter autocommands");
 #endif
 
@@ -1117,7 +1108,7 @@ main_loop(cmdwin, noexmode)
     int		noexmode;   /* TRUE when return on entering Ex mode */
 {
     oparg_T	oa;				/* operator arguments */
-    int		previous_got_int = FALSE;	/* "got_int" was TRUE */
+    volatile int previous_got_int = FALSE;	/* "got_int" was TRUE */
 #ifdef FEAT_CONCEAL
     linenr_T	conceal_old_cursor_line = 0;
     linenr_T	conceal_new_cursor_line = 0;

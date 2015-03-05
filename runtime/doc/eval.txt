@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 7.4.  Last change: 2014 Nov 05
+*eval.txt*	For Vim version 7.4.  Last change: 2015 Feb 10
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -956,7 +956,7 @@ Decimal, Hexadecimal (starting with 0x or 0X), or Octal (starting with 0).
 Floating point numbers can be written in two forms:
 
 	[-+]{N}.{M}
-	[-+]{N}.{M}e[-+]{exp}
+	[-+]{N}.{M}[eE][-+]{exp}
 
 {N} and {M} are numbers.  Both {N} and {M} must be present and can only
 contain digits.
@@ -1457,10 +1457,10 @@ v:foldstart	Used for 'foldtext': first line of closed fold.
 		Read-only in the |sandbox|. |fold-foldtext|
 
 					*v:hlsearch* *hlsearch-variable*
-v:hlsearch	Variable that determines whether search highlighting is on. 
-		Makes sense only if 'hlsearch' is enabled which requires 
-		|+extra_search|. Setting this variable to zero acts the like 
-		|:nohlsearch| command, setting it to one acts like >
+v:hlsearch	Variable that indicates whether search highlighting is on. 
+		Setting it makes sense only if 'hlsearch' is enabled which
+		requires |+extra_search|. Setting this variable to zero acts
+		the like |:nohlsearch| command, setting it to one acts like >
 			let &hlsearch = &hlsearch
 <
 					*v:insertmode* *insertmode-variable*
@@ -1755,8 +1755,8 @@ count( {list}, {expr} [, {ic} [, {start}]])
 				Number	 count how many {expr} are in {list}
 cscope_connection( [{num} , {dbpath} [, {prepend}]])
 				Number	checks existence of cscope connection
-cursor( {lnum}, {col} [, {coladd}])
-				Number	move cursor to {lnum}, {col}, {coladd}
+cursor( {lnum}, {col} [, {off}])
+				Number	move cursor to {lnum}, {col}, {off}
 cursor( {list})			Number	move cursor to position in {list}
 deepcopy( {expr} [, {noref}])	any	make a full copy of {expr}
 delete( {fname})		Number	delete file {fname}
@@ -2395,6 +2395,10 @@ col({expr})	The result is a Number, which is the byte index of the column
 			    number of bytes in the cursor line plus one)
 		    'x	    position of mark x (if the mark is not set, 0 is
 			    returned)
+		    v       In Visual mode: the start of the Visual area (the
+			    cursor is the end).  When not in Visual mode
+			    returns the cursor position.  Differs from |'<| in
+			    that it's updated right away.
 		Additionally {expr} can be [lnum, col]: a |List| with the line
 		and column number. Most useful when the column is "$", to get
 		the last column of a specific line.  When "lnum" or "col" is
@@ -2623,6 +2627,7 @@ cursor({list})
 		If {col} is zero, the cursor will stay in the current column.
 		If {curswant} is given it is used to set the preferred column
 		for vertical movement.  Otherwise {col} is used.
+
 		When 'virtualedit' is used {off} specifies the offset in
 		screen columns from the start of the character.  E.g., a
 		position within a <Tab> or after the last character.
@@ -2960,9 +2965,12 @@ extend({expr1}, {expr2} [, {expr3}])			*extend()*
 
 feedkeys({string} [, {mode}])				*feedkeys()*
 		Characters in {string} are queued for processing as if they
-		come from a mapping or were typed by the user.	They are added
-		to the end of the typeahead buffer, thus if a mapping is still
-		being executed these characters come after them.
+		come from a mapping or were typed by the user.
+		By default the string is added to the end of the typeahead
+		buffer, thus if a mapping is still being executed the
+		characters come after them.  Use the 'i' flag to insert before
+		other characters, they will be executed next, before any
+		characters from a mapping.
 		The function does not wait for processing of keys contained in
 		{string}.
 		To include special keys into {string}, use double-quotes
@@ -2976,6 +2984,7 @@ feedkeys({string} [, {mode}])				*feedkeys()*
 		't'	Handle keys as if typed; otherwise they are handled as
 			if coming from a mapping.  This matters for undo,
 			opening folds, etc.
+		'i'	Insert the string instead of appending (see above).
 		Return value is always 0.
 
 filereadable({file})					*filereadable()*
@@ -3304,6 +3313,17 @@ getchar([expr])						*getchar()*
 			:    endif
 			:  endwhile
 			:endfunction
+<
+		You may also receive synthetic characters, such as
+		|<CursorHold>|. Often you will want to ignore this and get
+		another character: >
+			:function GetKey()
+			:  let c = getchar()
+			:  while c == "\<CursorHold>"
+			:    let c = getchar()
+			:  endwhile
+			:  return c
+			:endfunction
 
 getcharmod()						*getcharmod()*
 		The result is a Number which is the state of the modifiers for
@@ -3514,7 +3534,7 @@ getpos({expr})	Get the position for {expr}.  For possible values of {expr}
 		This can be used to save and restore the position of a mark: >
 			let save_a_mark = getpos("'a")
 			...
-			call setpos(''a', save_a_mark
+			call setpos("'a", save_a_mark)
 <		Also see |getcurpos()| and |setpos()|.
 
 
@@ -4746,6 +4766,7 @@ printf({fmt}, {expr1} ...)				*printf()*
 		s	The text of the String argument is used.  If a
 			precision is specified, no more bytes than the number
 			specified are used.
+							*printf-S*
 		S	The text of the String argument is used.  If a
 			precision is specified, no more display cells than the
 			number specified are used.  Without the |+multi_byte|
@@ -4807,7 +4828,7 @@ py3eval({expr})						*py3eval()*
 		Evaluate Python expression {expr} and return its result
 		converted to Vim data structures.
 		Numbers and strings are returned as they are (strings are 
-		copied though, unicode strings are additionally converted to 
+		copied though, Unicode strings are additionally converted to 
 		'encoding').
 		Lists are represented as Vim |List| type.
 		Dictionaries are represented as Vim |Dictionary| type with 
@@ -4851,7 +4872,7 @@ readfile({fname} [, {binary} [, {max}]])
 		separated with CR will result in a single long line (unless a
 		NL appears somewhere).
 		All NUL characters are replaced with a NL character.
-		When {binary/append} is contains "b" binary mode is used:
+		When {binary/append} contains "b" binary mode is used:
 		- When the last line ends in a NL an extra empty list item is
 		  added.
 		- No CR characters are removed.
@@ -5546,7 +5567,7 @@ setwinvar({nr}, {varname}, {val})			*setwinvar()*
 			:call setwinvar(2, "myvar", "foobar")
 
 sha256({string})						*sha256()*
-		Returns a String with 64 hex charactes, which is the SHA256
+		Returns a String with 64 hex characters, which is the SHA256
 		checksum of {string}.
 		{only available when compiled with the |+cryptv| feature}
 
@@ -6406,6 +6427,10 @@ virtcol({expr})						*virtcol()*
 			    plus one)
 		    'x	    position of mark x (if the mark is not set, 0 is
 			    returned)
+		    v       In Visual mode: the start of the Visual area (the
+			    cursor is the end).  When not in Visual mode
+			    returns the cursor position.  Differs from |'<| in
+			    that it's updated right away.
 		Note that only marks in the current file can be used.
 		Examples: >
   virtcol(".")	   with text "foo^Lbar", with cursor on the "^L", returns 5
@@ -7355,7 +7380,7 @@ This does NOT work: >
 				:unlet v
 <							*E741*
 			If you try to change a locked variable you get an
-			error message: "E741: Value of {name} is locked"
+			error message: "E741: Value is locked: {name}"
 
 			[depth] is relevant when locking a |List| or
 			|Dictionary|.  It specifies how deep the locking goes:
@@ -8259,7 +8284,7 @@ You can catch all Vim errors by the pattern >
 							*catch-text*
 NOTE: You should never catch the error message text itself: >
 	:catch /No such variable/
-only works in the english locale, but not when the user has selected
+only works in the English locale, but not when the user has selected
 a different language by the |:language| command.  It is however helpful to
 cite the message text in a comment: >
 	:catch /^Vim(\a\+):E108:/   " No such variable

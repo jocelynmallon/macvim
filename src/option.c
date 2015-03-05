@@ -3025,6 +3025,7 @@ static struct vimoption
     p_term("t_WS", T_CWS)
     p_term("t_SI", T_CSI)
     p_term("t_EI", T_CEI)
+    p_term("t_xn", T_XN)
     p_term("t_xs", T_XS)
     p_term("t_ZH", T_CZH)
     p_term("t_ZR", T_CZR)
@@ -3152,9 +3153,11 @@ static void fill_breakat_flags __ARGS((void));
 static int opt_strings_flags __ARGS((char_u *val, char **values, unsigned *flagp, int list));
 static int check_opt_strings __ARGS((char_u *val, char **values, int));
 static int check_opt_wim __ARGS((void));
+
 #ifdef FEAT_LINEBREAK
 static int briopt_check __ARGS((win_T *wp));
 #endif
+
 #ifdef FEAT_FULLSCREEN
 static int check_fuoptions __ARGS((char_u *, unsigned *, int *));
 #endif
@@ -4608,21 +4611,11 @@ do_set(arg, opt_flags)
 				goto skip;
 			    }
 			}
-				/* allow negative numbers (for 'undolevels') */
 			else if (*arg == '-' || VIM_ISDIGIT(*arg))
 			{
-			    i = 0;
-			    if (*arg == '-')
-				i = 1;
-#ifdef HAVE_STRTOL
-			    value = strtol((char *)arg, NULL, 0);
-			    if (arg[i] == '0' && TOLOWER_ASC(arg[i + 1]) == 'x')
-				i += 2;
-#else
-			    value = atol((char *)arg);
-#endif
-			    while (VIM_ISDIGIT(arg[i]))
-				++i;
+			    /* Allow negative (for 'undolevels'), octal and
+			     * hex numbers. */
+			    vim_str2nr(arg, NULL, &i, TRUE, TRUE, &value, NULL);
 			    if (arg[i] != NUL && !vim_iswhite(arg[i]))
 			    {
 				errmsg = e_invarg;
@@ -5647,6 +5640,7 @@ set_string_option_direct(name, opt_idx, val, opt_flags, set_sid)
 	if (idx < 0)	/* not found (should not happen) */
 	{
 	    EMSG2(_(e_intern2), "set_string_option_direct()");
+	    EMSG2(_("For option %s"), name);
 	    return;
 	}
     }
@@ -6783,15 +6777,16 @@ did_set_string_option(opt_idx, varp, new_value_alloced, oldval, errbuf,
 #ifdef FEAT_SPELL
     /* When 'spelllang' or 'spellfile' is set and there is a window for this
      * buffer in which 'spell' is set load the wordlists. */
-    else if (varp == &(curbuf->b_s.b_p_spl) || varp == &(curbuf->b_s.b_p_spf))
+    else if (varp == &(curwin->w_s->b_p_spl)
+	    || varp == &(curwin->w_s->b_p_spf))
     {
 	win_T	    *wp;
 	int	    l;
 
-	if (varp == &(curbuf->b_s.b_p_spf))
+	if (varp == &(curwin->w_s->b_p_spf))
 	{
-	    l = (int)STRLEN(curbuf->b_s.b_p_spf);
-	    if (l > 0 && (l < 4 || STRCMP(curbuf->b_s.b_p_spf + l - 4,
+	    l = (int)STRLEN(curwin->w_s->b_p_spf);
+	    if (l > 0 && (l < 4 || STRCMP(curwin->w_s->b_p_spf + l - 4,
 								".add") != 0))
 		errmsg = e_invarg;
 	}
@@ -11364,7 +11359,7 @@ wc_use_keyname(varp, wcp)
     return FALSE;
 }
 
-#ifdef FEAT_LANGMAP
+#if defined(FEAT_LANGMAP) || defined(PROTO)
 /*
  * Any character has an equivalent 'langmap' character.  This is used for
  * keyboards that have a special language mode that sends characters above
@@ -11378,7 +11373,7 @@ wc_use_keyname(varp, wcp)
  * langmap_entry_T.  This does the same as langmap_mapchar[] for characters >=
  * 256.
  */
-# ifdef FEAT_MBYTE
+# if defined(FEAT_MBYTE) || defined(PROTO)
 /*
  * With multi-byte support use growarray for 'langmap' chars >= 256
  */
